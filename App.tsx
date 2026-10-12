@@ -593,6 +593,11 @@ function App() {
     if (simulateAbortRef.current) {
       simulateAbortRef.current.abort('Simulation cancelled by user.');
       simulateAbortRef.current = null;
+      // Network expansion and some solvers run CPU-bound loops in the worker.
+      // A cancel message cannot be handled until those loops yield, so recycle
+      // the worker here to make the next parse or simulation available at once.
+      // This also clears worker-side prepared-model IDs before a new request.
+      bnglService.restart();
     }
     if (paramPatchFrameRef.current !== null) {
       cancelAnimationFrame(paramPatchFrameRef.current);

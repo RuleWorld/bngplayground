@@ -109,6 +109,7 @@
   /* ---------- the draw ---------- */
   .draw-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-top: 1.5rem; }
   .draw-bar .field { margin: 0; flex: 1 1 14rem; }
+  .draw-note { flex: 1 1 100%; margin: 0; font-size: 0.95rem; color: var(--muted); }
 
   .assignment { margin-bottom: 2.5rem; }
   .tag {
@@ -194,7 +195,7 @@
 
   <header class="intro">
     <h1>Module 2 in BNG Playground</h1>
-    <p>You will be given tasks based on the Module 2 lecture, mostly the “Try it yourself” exercises, using the STAT–SOCS models from the course repository. Do each task in the Playground, then report how it went. When you finish a report, use “Draw the next task” below it. <strong>Three tasks take about 30–45 minutes.</strong></p>
+    <p>You will be given tasks based on the Module 2 lecture, mostly the “Try it yourself” exercises, using the STAT–SOCS models from the course repository. Do each task in the Playground, then report how it went. When you finish a report, use “Draw the next task” below it. <strong>Three tasks take about 30–45 minutes, and three is enough.</strong> Once you have done three, stop drawing and carry on to section 3. A fourth or fifth task is welcome but never required.</p>
   </header>
 
   <form id="form" novalidate>
@@ -301,7 +302,7 @@
 
     <section class="step" aria-labelledby="s2">
       <h2 id="s2"><span class="n">2</span>Do the tasks</h2>
-      <p class="lede">Draw a task, follow its steps in the Playground, then fill in the report below it. Each task names the lecture model it uses.</p>
+      <p class="lede">Draw a task, follow its steps in the Playground, then fill in the report below it. Each task names the lecture model it uses. Stop after three tasks, or sooner if you like, and move on to section 3.</p>
       <div class="panel howto">
         <p class="howto-h">Loading a lecture model into the Playground</p>
         <ol>
@@ -317,6 +318,7 @@
       <div class="empty" id="empty">No tasks yet. Draw your first one to get started.</div>
       <div class="draw-bar">
         <button type="button" class="btn" id="draw-btn">Draw a task</button>
+        <p class="draw-note" id="draw-note" hidden>Three tasks is the target, so this is a good place to stop if you have done that many. Carry on to <a href="#s3">section 3, Overall usability</a>, or keep drawing if you want to try more.</p>
       </div>
     </section>
 
@@ -506,6 +508,9 @@ const MODELS_URL = 'https://github.com/jrfaeder/RBM_Intro_BioNetGen/blob/main/mo
 const FORM_ID = 'mscbio2025-module2';
 const STORAGE_KEY = 'bngpg-feedback-mscbio2025-m2-v1';
 const SCHEMA_VERSION = 1;
+// How many tasks we ask for before pointing people at section 3. Drawing beyond
+// this stays allowed; the hint under the draw button is what tells people to stop.
+const TARGET_TASKS = 3;
 
 // Lecture model versions (Module 2, slides 12–20). Species and reaction counts are the
 // values shown in the lecture, kept for comparison with what students report.
@@ -840,6 +845,7 @@ function renderAssignments(dealtKey) {
   box.innerHTML = '';
   $('#empty').style.display = state.assignments.length ? 'none' : 'block';
   $('#draw-btn').textContent = state.assignments.length ? 'Draw the next task' : 'Draw a task';
+  $('#draw-note').hidden = state.assignments.length < TARGET_TASKS;
 
   state.assignments.forEach((a, i) => {
     const task = TASKS.find(t => t.id === a.task_id);
