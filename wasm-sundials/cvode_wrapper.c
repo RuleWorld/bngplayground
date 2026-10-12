@@ -295,12 +295,27 @@ static int network_jac(realtype t, N_Vector y, N_Vector fy, SUNMatrix Jac,
     if (!bc || !bc->jacRowPtr) return -1;
     
     double* y_data = N_VGetArrayPointer(y);
-    
-    // Explicitly zero matrix since we only fill nonzero entries from the sparsity pattern
-    SUNMatZero(Jac);
 
     const int is_sparse = SUNMatGetID(Jac) == SUNMATRIX_SPARSE;
     sunrealtype* sparse_data = is_sparse ? SUNSparseMatrix_Data(Jac) : NULL;
+
+    if (is_sparse) {
+        // SUNDIALS >= 7.0 makes SUNMatZero() on a SUNSparseMatrix clear the
+        // index arrays as well as the values (indexvals/indexptrs), and
+        // cvLsLinSys() calls SUNMatZero(A) before every user Jacobian whenever
+        // the linear solver is direct (KLU is). bind_network() installs the CSR
+        // pattern once, so it must be re-installed on every evaluation or KLU
+        // factorizes an empty matrix and the Newton solve fails.
+        sunindextype* row_ptr = SUNSparseMatrix_IndexPointers(Jac);
+        sunindextype* col_idx = SUNSparseMatrix_IndexValues(Jac);
+        if (!row_ptr || !col_idx) return -1;
+        for (int i = 0; i <= bc->nSpecies; i++) row_ptr[i] = (sunindextype)bc->jacRowPtr[i];
+        for (int k = 0; k < bc->jacRowPtr[bc->nSpecies]; k++) col_idx[k] = (sunindextype)bc->jacColIdx[k];
+    } else {
+        // Explicitly zero the dense matrix since we only fill nonzero entries
+        // from the sparsity pattern.
+        SUNMatZero(Jac);
+    }
 
     // CSR iteration over the Jacobian sparsity pattern.
     for (int i = 0; i < bc->nSpecies; i++) {
