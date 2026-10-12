@@ -225,7 +225,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
           {selectedRuleImpact && (
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               {renderAtomList(selectedRuleImpact.produces, 'Produces', 'bg-emerald-500')}
-              {renderAtomList(selectedRuleImpact.modifies, 'Modifies', 'bg-sky-500')}
+              {renderAtomList(selectedRuleImpact.modifies, 'Context', 'bg-sky-500')}
               {renderAtomList(selectedRuleImpact.consumes, 'Consumes', 'bg-amber-500')}
             </div>
           )}
