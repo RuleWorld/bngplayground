@@ -121,9 +121,28 @@ fi
 
 if command -v "$WASM_OPT" &> /dev/null; then
   echo "Optimizing cvode.wasm with wasm-opt..."
-  "$WASM_OPT" -Oz --enable-exception-handling --enable-sign-ext cvode.wasm -o cvode.wasm
+  # emcc 6 emits bulk-memory and mutable-global/nontrapping-float-to-int opcodes
+  # that this binaryen rejects unless each feature is enabled explicitly. Do NOT
+  # use --all-features: that admits function-references, which emits import
+  # kind 0x7f and makes the module fail WebAssembly.instantiate() at load.
+  # Write to a temp file first; the previous in-place form could truncate the
+  # input when validation failed.
+  WASM_OPT_TMP="$(mktemp -t cvode_opt).wasm"
+  if "$WASM_OPT" -Oz --enable-exception-handling --enable-sign-ext \
+      --enable-bulk-memory --enable-bulk-memory-opt \
+      --enable-mutable-globals --enable-nontrapping-float-to-int \
+      cvode.wasm -o "$WASM_OPT_TMP"; then
+    mv "$WASM_OPT_TMP" cvode.wasm
+  else
+    rm -f "$WASM_OPT_TMP"
+    echo "ERROR: wasm-opt failed; refusing to ship an unoptimized cvode.wasm." >&2
+    echo "       Install binaryen (brew install binaryen) or set WASM_OPT to a working binary." >&2
+    exit 1
+  fi
 else
-  echo "wasm-opt not found, skipping optimization for cvode.wasm."
+  echo "ERROR: wasm-opt not found. The checked-in cvode.wasm is optimized; install binaryen" >&2
+  echo "       (brew install binaryen) so this build matches what ships." >&2
+  exit 1
 fi
 
 cp cvode.js "$ORIG_DIR/../services/cvode_loader.js"
