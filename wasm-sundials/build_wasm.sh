@@ -119,7 +119,17 @@ if [ -f "/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt" ]; then
   WASM_OPT="/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt"
 fi
 
-if command -v "$WASM_OPT" &> /dev/null; then
+IS_SANITIZER_BUILD=0
+if [ "${CVODE_SANITIZERS:-0}" = "1" ]; then
+  IS_SANITIZER_BUILD=1
+fi
+
+if [ "$IS_SANITIZER_BUILD" = "1" ]; then
+  # CVODE_SANITIZERS=1 is the CI verification build, not the shipped artifact.
+  # It is deliberately left unoptimized: the ASan/UBSan instrumentation is not
+  # something wasm-opt should rewrite, and CI does not install binaryen.
+  echo "Sanitizer build: skipping wasm-opt for cvode.wasm."
+elif command -v "$WASM_OPT" &> /dev/null; then
   echo "Optimizing cvode.wasm with wasm-opt..."
   # emcc 6 emits bulk-memory and mutable-global/nontrapping-float-to-int opcodes
   # that this binaryen rejects unless each feature is enabled explicitly. Do NOT
@@ -140,8 +150,10 @@ if command -v "$WASM_OPT" &> /dev/null; then
     exit 1
   fi
 else
-  echo "ERROR: wasm-opt not found. The checked-in cvode.wasm is optimized; install binaryen" >&2
-  echo "       (brew install binaryen) so this build matches what ships." >&2
+  echo "ERROR: wasm-opt not found. The checked-in cvode.wasm is optimized, so a build" >&2
+  echo "       that silently skips this step ships a larger, unoptimized artifact." >&2
+  echo "       Install binaryen (brew install binaryen) or set WASM_OPT to a working binary." >&2
+  echo "       (CI's CVODE_SANITIZERS=1 verification build does not need wasm-opt.)" >&2
   exit 1
 fi
 
