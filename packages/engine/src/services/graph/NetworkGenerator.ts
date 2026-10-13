@@ -2793,6 +2793,8 @@ export class NetworkGenerator {
     // `ruleSymmetryFactor` divides by factorial(groupSize) for each identical-pattern group,
     // but for a concrete species tuple we should divide only by repeats of the SAME species
     // within that group (e.g., A+A distinct pair: no 1/2; A+A same species: 1/2 applies).
+    let tupleAwareCorrectionApplied = false;
+
 
     for (const group of identicalPatternGroups.values()) {
       if (group.length < 2) continue;
