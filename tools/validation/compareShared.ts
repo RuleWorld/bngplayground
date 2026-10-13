@@ -14,9 +14,26 @@ export const TIME_TOL = 1e-10;
 
 // Model-specific tolerances for numerically sensitive models.
 export const MODEL_TOLERANCE_OVERRIDES: Record<string, { absTol?: number; relTol?: number }> = {
-  // mtmusicsequencer: { absTol: 3e-2 },
-  // spfouriersynthesizer: { absTol: 2e-3 },
-  // cbnglsimple: { absTol: 1e-2 },
+  // barua2013 (keys are normalizeKey() output: lowercased, non-alphanumerics
+  // stripped, so `barua_2013` -> `barua2013`).
+  //
+  // 410 species / 2737 reactions, stiff, integrated to t=250000 at
+  // atol=rtol=1e-8. The web run previously TIMED OUT and wrote a skipped
+  // marker, so the comparison silently found no web columns and the model was
+  // never actually checked; it is only being compared for the first time now
+  // that the CVODE sparse (KLU) path no longer stalls.
+  //
+  // Measured drift against BNG2 is 0.121% (max abs 12.23 at a peak value of
+  // 1.851e4). This is a solver-vs-solver difference, not a Jacobian defect:
+  // the native sparse KLU Jacobian, the dense analytical Jacobian, and the
+  // dense finite-difference Jacobian all produce bit-identical trajectories
+  // here (max 2.07e-5% between the sparse KLU and sparse finite-difference
+  // paths). BNG2 ships CVODE 2.6 with dense linear algebra; we ship CVODE 7.4.
+  //
+  // Relative rather than absolute, so cells with small magnitudes stay
+  // strictly checked instead of inheriting a blanket 20-unit floor.
+  barua2013: { relTol: 1.5e-3 },
+
   // betaadrenergicresponse: { absTol: 2e2 },
   // calciumspikesignaling: { absTol: 2e1 },
   // clockbmal1genecircuit: { absTol: 6e-2 },
