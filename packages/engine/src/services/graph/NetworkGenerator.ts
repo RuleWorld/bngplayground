@@ -2530,12 +2530,14 @@ export class NetworkGenerator {
           if (candidateSet.size === 0) break;
         }
 
-        const candidates = candidateSet ? Array.from(candidateSet) : [];
+        // candidateSet is always a snapshot copy of the inverted-index sets. Iterate it
+        // directly so each recursive partner search does not allocate a candidates array.
+        if (!candidateSet) return;
         // Carry-through patterns (unchanged by rule ops) should only contribute ONE match
         // per candidate species. Their monomer-level multiplicity does NOT add to the rate
         // (only changed-reactant embeddings count toward BNG2 stat factors).
         const isCarryThroughPattern = carryThroughPatternIndices.has(nextPatternIdx);
-        for (const candidateIdx of candidates) {
+        for (const candidateIdx of candidateSet) {
           // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
           const candidateSpecies = allSpecies[candidateIdx];
           // O(1) early structural pruning before calling any matches/isomorphisms

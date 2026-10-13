@@ -2026,25 +2026,17 @@ class VF2State {
    * where the bonds are dangling (partner not present).
    */
   private targetHasBond(tMolIdx: number, tCompIdx: number): boolean {
-    const hasAdj = this.target.componentHasAnyBond(tMolIdx, tCompIdx);
-
-    // Check resolved bonds in adjacency map
-    if (hasAdj) {
-      return true;
-    }
-    // Also check for dangling/unresolved bonds in component.edges
-    // These have value -1 to indicate the partner wasn't found during parsing
+    // Any edge entry already proves that the site is bound, including dangling
+    // bonds whose partner is absent from the target graph. Check this first so
+    // common explicitly-bound sites avoid scanning the adjacency bitset.
     const comp = this.target.molecules[tMolIdx]?.components[tCompIdx];
-    const edgeSize = comp?.edges?.size ?? 0;
-
-    if (shouldLogGraphMatcher && !hasAdj && edgeSize === 0) {
-      // console.log(`[GraphMatcher] targetHasBond(${tMolIdx}.${tCompIdx}) failed: adjacency.size=${this.target.adjacency.size}, edges.size=${edgeSize}`);
-    }
-
-    if (edgeSize > 0) {
+    if ((comp?.edges?.size ?? 0) > 0) {
       return true;
     }
-    return false;
+
+    // Components without edge metadata may still be represented in the
+    // resolved adjacency index, so retain the existing fallback.
+    return this.target.componentHasAnyBond(tMolIdx, tCompIdx);
   }
 
   private areComponentsBonded(
