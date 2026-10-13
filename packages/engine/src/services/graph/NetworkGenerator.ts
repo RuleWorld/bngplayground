@@ -1201,8 +1201,7 @@ export class NetworkGenerator {
       if (!species.graph.adjacencyBitset) {
         species.graph.buildAdjacencyBitset();
       }
-      const maps = profiledFindAllMaps(pattern, species.graph);
-      return maps.length > 0;
+      return profiledFindFirstMap(pattern, species.graph) !== null;
     };
 
     // Reactant mapping based on index (0-based)
@@ -1273,8 +1272,7 @@ export class NetworkGenerator {
       if (!species.graph.adjacencyBitset) {
         species.graph.buildAdjacencyBitset();
       }
-      const maps = profiledFindAllMaps(pattern, species.graph);
-      return maps.length > 0;
+      return profiledFindFirstMap(pattern, species.graph) !== null;
     };
 
     if (rule.excludeProducts) {
@@ -1533,7 +1531,7 @@ export class NetworkGenerator {
     const matches: MatchMap[] = [];
     if (rule.isMatchOnce) {
       const firstMap = profiledFindFirstMap(pattern, reactantSpecies.graph, { symmetryBreaking: true });
-      if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap) &&
+      if (firstMap &&
         this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, firstMap)) {
         matches.push(firstMap);
       }
@@ -1542,7 +1540,6 @@ export class NetworkGenerator {
       const candidateMaps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
       for (const match of candidateMaps) {
         if (
-          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
           this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
         ) {
           matches.push(match);
@@ -2034,46 +2031,6 @@ export class NetworkGenerator {
     }
   }
 
-  private matchRespectsExplicitComponentBondCounts(
-    pattern: SpeciesGraph,
-    target: SpeciesGraph,
-    match: MatchMap
-  ): boolean {
-    for (const [patternMolIdx, targetMolIdx] of match.moleculeMap.entries()) {
-      const patternMol = pattern.molecules[patternMolIdx];
-      const targetMol = target.molecules[targetMolIdx];
-      if (!patternMol || !targetMol) return false;
-
-      for (let patternCompIdx = 0; patternCompIdx < patternMol.components.length; patternCompIdx++) {
-        const patternComp = patternMol.components[patternCompIdx];
-
-        if (patternComp.wildcard) continue;
-
-        const targetCompKey = match.componentMap.get(`${patternMolIdx}.${patternCompIdx}`);
-        if (!targetCompKey) return false;
-
-        // ⚡ Bolt: Use slice directly to avoid split() array allocation
-        const targetCompIdx = Number(targetCompKey.slice(targetCompKey.indexOf('.') + 1));
-        const targetComp = targetMol.components[targetCompIdx];
-        if (!targetComp) return false;
-
-        // Plain components without explicit bond constraints are unconstrained in BNGL
-        // rule matching and may bind to either bound or unbound target sites.
-        if (patternComp.edges.size === 0) {
-          continue;
-        }
-
-        // Reaction-rule parity: an explicit bonded site like b!1 should not match a site
-        // with additional bonds (e.g., b!1!2) unless wildcard semantics are used.
-        if (targetComp.edges.size !== patternComp.edges.size) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
   /**
    * The rule's molecule-level correspondence between reactants and products.
    *
@@ -2387,7 +2344,7 @@ export class NetworkGenerator {
 
       if (rule.isMatchOnce) {
         const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
-        if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap) &&
+        if (firstMap &&
           this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, firstMap)) {
           matches.push(firstMap);
         }
@@ -2397,7 +2354,6 @@ export class NetworkGenerator {
         const candidateMaps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
         for (const match of candidateMaps) {
           if (
-            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
             this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
           ) {
             matches.push(match);
@@ -2549,7 +2505,7 @@ export class NetworkGenerator {
 
           if (limitToSingleMatch) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-            if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap) &&
+            if (firstCandMap &&
               this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, firstCandMap)) {
               candMaps.push(firstCandMap);
             }
@@ -2559,7 +2515,6 @@ export class NetworkGenerator {
             const candidateMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
             for (const candMatch of candidateMaps) {
               if (
-                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
                 this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
               ) {
                 candMaps.push(candMatch);
@@ -2936,7 +2891,6 @@ export class NetworkGenerator {
         for (let k = 0; k < n; k++) {
           const sbMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: true })
             .filter((m) =>
-              this.matchRespectsExplicitComponentBondCounts(patterns[k], reactantSpeciesList[k].graph, m) &&
               this.matchRespectsProductImpliedFreeConstraints(rule, patterns[k], reactantSpeciesList[k].graph, m)
             );
           // Fall back to the provided match (if any) to ensure at least one representative
