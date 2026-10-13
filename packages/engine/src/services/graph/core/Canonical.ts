@@ -4,6 +4,40 @@ import { NautyService } from './NautyService.ts';
 import { Molecule } from './Molecule.ts';
 import { Component } from './Component.ts';
 
+/**
+ * Canonical-form memo.
+ *
+ * `canonicalize` is a pure function of the graph it is handed, but the network
+ * generator builds a fresh `SpeciesGraph` for every candidate product, so the
+ * same structure is canonicalized over and over: 37-77% of all multi-molecule
+ * calls across the RuleHub corpus are repeats of a structure already seen.
+ *
+ * The key is an exact structural encoding, not a hash, so a hit is a graph
+ * whose every field the canonicalizer reads matches. It must stay in sync with
+ * what the canonicalizer actually reads: molecule order, molecule name and
+ * compartment, component name/state/bond wildcard in index order, the graph
+ * compartment, and the full adjacency. Fields the canonicalizer never reads
+ * (component edge labels, molecule wildcards, source bookkeeping) are
+ * deliberately excluded so isomorphic graphs collide as often as possible.
+ *
+ * The memo outlives a single generation, so it needs a size bound.
+ * The budget is counted in key characters rather than entries because the keys
+ * are the memory: a polymer species key is kilobytes long while a dimer's is a
+ * few dozen bytes, so an entry cap would admit far more memory for the latter
+ * than for the former. Clearing wholesale beats maintaining LRU bookkeeping on
+ * the hot path, and a generation that exhausts the budget has far more distinct
+ * structures than it could afford to keep anyway.
+ */
+const MAX_CANONICAL_MEMO_CHARS = 8_000_000;
+const canonicalMemo = new Map<string, string>();
+let canonicalMemoChars = 0;
+
+/** Drop every memoized canonical form. Called with the other per-generation caches. */
+export function clearCanonicalCache(): void {
+  canonicalMemo.clear();
+  canonicalMemoChars = 0;
+}
+
 interface MoleculeInfo {
   originalIndex: number;
   localSignature: string;
@@ -64,6 +98,73 @@ export class GraphCanonicalizer {
       graph.cachedCanonical = result;
       return result;
     }
+
+    // Multi-molecule species are the only ones worth memoizing: they run WL
+    // refinement, a traversal and a bounded permutation search, whereas the
+    // single-molecule path above is already one string build, so a memo lookup
+    // there would cost about as much as recomputing it.
+    const memoKey = this.memoKey(graph);
+    const memoized = canonicalMemo.get(memoKey);
+    if (memoized !== undefined) {
+      graph.cachedCanonical = memoized;
+      return memoized;
+    }
+
+    const computed = this.canonicalizeMultiMolecule(graph);
+    if (canonicalMemoChars >= MAX_CANONICAL_MEMO_CHARS) {
+      canonicalMemo.clear();
+      canonicalMemoChars = 0;
+    }
+    canonicalMemo.set(memoKey, computed);
+    canonicalMemoChars += memoKey.length + computed.length;
+    graph.cachedCanonical = computed;
+    return computed;
+  }
+
+  /**
+   * Exact structural encoding of everything the multi-molecule canonicalizer
+   * reads, used as the memo key. Not a hash: a collision would be a wrong
+   * answer rather than a miss.
+   *
+   * Length-prefixing every variable-length field keeps the encoding injective
+   * without escaping, and index order is preserved deliberately — the
+   * canonicalizer resolves residual symmetry from the graph's own indices, so
+   * two graphs that differ only in index layout are not interchangeable. The
+   * Nauty prefix keeps the two labeling strategies in separate namespaces: they
+   * can label differently, and the WASM may be initialized after earlier calls.
+   */
+  private static memoKey(graph: SpeciesGraph): string {
+    const parts: string[] = [
+      NautyService.getInstance().isInitialized ? 'n' : 'j',
+      graph.compartment ?? '',
+      String(graph.molecules.length),
+    ];
+    for (const mol of graph.molecules) {
+      const name = mol.name;
+      const molCompartment = mol.compartment ?? '';
+      const components = mol.components;
+      parts.push(`${name.length}\u0001${name}`, `${molCompartment.length}\u0001${molCompartment}`, String(components.length));
+      for (const comp of components) {
+        const compName = comp.name;
+        const state = comp.state ?? '';
+        const wildcard = comp.wildcard ?? '';
+        parts.push(`${compName.length}\u0001${compName}`, `${state.length}\u0001${state}`, `${wildcard.length}\u0001${wildcard}`);
+      }
+    }
+    const adjacency = graph.adjacency;
+    parts.push(String(adjacency.size));
+    for (const [key, partners] of adjacency) {
+      parts.push(key, String(partners.length));
+      for (const partner of partners) parts.push(partner);
+    }
+    return parts.join('\u0000');
+  }
+
+  /**
+   * Canonicalize a species of two or more molecules: WL-refine, pick a
+   * traversal order, renumber bonds, serialize.
+   */
+  private static canonicalizeMultiMolecule(graph: SpeciesGraph): string {
 
     // 1. Get refined molecule infos (Orbits/Colors)
     // We use WL refinement to get robust vertex partitions (colors) that encode
@@ -432,7 +533,6 @@ export class GraphCanonicalizer {
     // canonicalization remains safe for arbitrary polymers.
     const symmetryCanonical = this.tryCanonicalizeByPermutation(graph, moleculeInfos, finalOrder);
     if (symmetryCanonical !== undefined) {
-      graph.cachedCanonical = symmetryCanonical;
       return symmetryCanonical;
     }
 
@@ -548,7 +648,6 @@ export class GraphCanonicalizer {
     // BNG2 convention: use double-colon prefix if all molecules are in the same compartment
     // defined at the graph level.
     const finalResult = graph.compartment ? `@${graph.compartment}::${canonicalMolecules}` : canonicalMolecules;
-    graph.cachedCanonical = finalResult;
     return finalResult;
   }
 
