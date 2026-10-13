@@ -136,6 +136,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model, bnglText }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isExpandingNetwork, setIsExpandingNetwork] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expansionWarning, setExpansionWarning] = useState<string | null>(null);
   const [wasmMissing, setWasmMissing] = useState(false);
   const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
@@ -191,6 +192,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model, bnglText }) => {
     setIsLoading(true);
     setError(null);
     setWasmMissing(false);
+    setExpansionWarning(null);
     setLayoutDone(false);
     try {
       // Auto-expand reaction network if needed
@@ -203,6 +205,9 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model, bnglText }) => {
             description: 'Network expansion for Reaction graph',
           });
           setExpandedReactionModel(sourceModel);
+          // A capped expansion returns a usable but truncated network: say so instead
+          // of letting the graph below look like the model's real reaction network.
+          setExpansionWarning(sourceModel.networkWarning ?? null);
         } catch (expandErr: unknown) {
           const msg = expandErr instanceof Error ? expandErr.message : String(expandErr);
           throw new Error(`Network expansion failed: ${msg}`, { cause: expandErr });
@@ -546,6 +551,16 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model, bnglText }) => {
             <strong>Reaction graph requires a reaction network.</strong>{' '}
             Click <strong>Run Analysis</strong> to auto-generate the network, or go to the{' '}
             <strong>Network</strong> tab and click <strong>Generate Network</strong> first.
+          </span>
+        </div>
+      )}
+
+      {/* Auto-expansion hit a generation limit: the graph below is a truncated network */}
+      {expansionWarning && (
+        <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <span>
+            <strong>Reaction network is incomplete.</strong> {expansionWarning}
           </span>
         </div>
       )}

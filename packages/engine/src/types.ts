@@ -221,6 +221,11 @@ export interface BNGLModel {
     variableStoichiometries?: BNGLVariableStoichiometry[];
     /** SBML value units for species targets used by assignment rules. */
     speciesValueTypes?: Record<string, 'amount' | 'concentration'>;
+    /** False when expansion stopped on a generation limit: `species`/`reactions` are a
+     *  truncated prefix of the real network, so any trajectory from them is wrong. */
+    networkComplete?: boolean;
+    /** User-facing reason the network is truncated; set only when `networkComplete` is false. */
+    networkWarning?: string;
     networkOptions?: {
         maxSpecies?: number;
         maxReactions?: number;
@@ -530,6 +535,8 @@ export interface GeneratorProgress {
     iteration: number;
     memoryUsed: number;
     timeElapsed: number;
+    /** Set on the final update when the network is truncated (see BNGLModel.networkWarning). */
+    warning?: string;
 }
 
 export interface NetworkAnalysisPayload {

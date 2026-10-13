@@ -7,7 +7,7 @@ import { SpeciesGraph } from './core/SpeciesGraph';
 import { Species } from './core/Species';
 import { RxnRule } from './core/RxnRule';
 import { Rxn } from './core/Rxn';
-import { GraphCanonicalizer } from './core/Canonical';
+import { GraphCanonicalizer, clearCanonicalCache } from './core/Canonical';
 import { GraphMatcher, clearMatchCache } from './core/Matcher';
 import type { MatchMap } from './core/Matcher';
 import { countEmbeddingDegeneracy, countRxnCenterImages } from './core/degeneracy';
@@ -27,6 +27,15 @@ import { computeRuleDivisor } from './core/RuleStatFactor';
  */
 const RXN_CENTER_IMAGE_BUDGET = 20000;
 
+/**
+ * Appended to every limit error: a breach is the caller's cue to raise a limit or
+ * to change method, so the message names the ways out, not just the number that
+ * stopped expansion.
+ */
+const LIMIT_BREACH_HINT =
+  'Raise max_species / max_reactions / max_iter in the generate_network() action, ' +
+  'or simulate the model network-free with simulate({method: "nf"}).';
+
 export class NetworkGenerationLimitError extends Error {
   constructor(
     message: string,
@@ -37,6 +46,23 @@ export class NetworkGenerationLimitError extends Error {
     super(message);
     this.name = 'NetworkGenerationLimitError';
   }
+}
+
+/**
+ * Outcome of one network expansion.
+ *
+ * `complete: false` means a generation limit stopped expansion before the rule set
+ * was exhausted, so `species`/`reactions` are a truncated prefix of the real
+ * network and any trajectory computed from them is wrong. The reason travels with
+ * the result so callers can surface it instead of presenting a cut-off network as
+ * if it were complete.
+ */
+export interface NetworkGenerationResult {
+  species: Species[];
+  reactions: Rxn[];
+  complete: boolean;
+  /** Why expansion stopped early. Present exactly when `complete` is false. */
+  warning?: string;
 }
 
 
@@ -557,7 +583,6 @@ export class NetworkGenerator {
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
   private aggLimitWarnings = 0;
-  private speciesLimitWarnings = 0;
   private currentRuleName: string | null = null;
   private currentSpeciesList: Species[] = [];
   private currentReactionsList: Rxn[] = [];
@@ -886,8 +911,11 @@ export class NetworkGenerator {
    *    and propagates `MoveConnected` transitions across connected complexes.
    * 8. **Compartment Adjacency Validation**: Verifies that newly formed bonds only span identical or adjacent compartments,
    *    rejecting invalid trans-compartmental product topologies.
-   * 9. **Resource Constraint Monitoring**: Safeguards the execution context by throwing error limits or gracefully
-   *    returning partial networks if max species, max reactions, max iterations, max complex size, or JS heap memory limits are exceeded.
+   * 9. **Resource Constraint Monitoring**: Stops expansion when a max species, max reactions,
+   *    max iterations, or max complex size limit is breached (and fails outright on the JS heap
+   *    limit). A breach means the network is INCOMPLETE, so the result comes back with
+   *    `complete: false` and a user-facing `warning`: a truncated network must never be
+   *    presented as a finished one.
    *
    * Invariants:
    * - **Browser-API-Free**: This function relies on zero browser or DOM APIs and is fully compatible with server-side Node.js, Web Worker, and headless MCP contexts.
@@ -896,21 +924,19 @@ export class NetworkGenerator {
    * @param rules - The reaction rules (with defined rate constants, reactants, products, and constraints) to expand.
    * @param onProgress - Optional callback invoked periodically with current generation metrics.
    * @param signal - Optional AbortSignal to cancel the network generation.
-   * @returns A promise resolving to an object containing arrays of generated Species and Rxn reactions.
-   * @throws {NetworkGenerationLimitError} If species, reaction, iteration, or memory thresholds are breached.
+   * @returns A promise resolving to the generated Species and Rxn arrays plus how complete the
+   *    expansion was (see {@link NetworkGenerationResult}).
    */
   async generate(
     seedSpecies: SpeciesGraph[],
     rules: RxnRule[],
     onProgress?: (progress: GeneratorProgress) => void,
     signal?: AbortSignal
-  ): Promise<{ species: Species[]; reactions: Rxn[] }> {
+  ): Promise<NetworkGenerationResult> {
 
     this.startTime = Date.now();
     this.lastMemoryCheck = this.startTime;
     this.aggLimitWarnings = 0;
-
-    this.speciesLimitWarnings = 0;
     this.currentRuleName = null;
 
     // Reset inverted index and caches
@@ -918,6 +944,7 @@ export class NetworkGenerator {
     this.structuralHashMap.clear();
     this.pureStateChangePlanCache = new WeakMap();
     clearMatchCache();
+    clearCanonicalCache();
 
     const speciesMap = new Map<string, Species>();
     const speciesList: Species[] = [];
@@ -978,6 +1005,8 @@ export class NetworkGenerator {
     let lastLoggedSpeciesCount = speciesList.length;
     const logInterval = 50; // Log every 50 new species
     let lastProgressCallback = onProgress ? Date.now() : 0;
+    // Set when a generation limit truncates the network; travels out with the result.
+    let limitWarning: string | undefined;
 
     progressLog(`[NetworkGenerator] Starting with ${speciesList.length} seed species, ${rules.length} rules`);
 
@@ -1076,7 +1105,7 @@ export class NetworkGenerator {
 
             if (reactionsList.length >= this.options.maxReactions) {
               throw this.buildLimitError(
-                `Reached max reactions limit (${this.options.maxReactions}) while applying rule "${this.currentRuleName ?? 'unknown'}"`
+                `Reached max reactions limit (${this.options.maxReactions}) while applying rule "${this.currentRuleName ?? 'unknown'}" - network is incomplete. ${LIMIT_BREACH_HINT}`
               );
             }
           }
@@ -1117,32 +1146,38 @@ export class NetworkGenerator {
           }
         }
       }
-    } catch (e: unknown) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      // Catch limit errors and return partial results
-      if (err.name === 'NetworkGenerationLimitError') {
-        console.warn(`Network generation limit reached: ${err.message}`);
-        // Continue and return partial results
-      } else {
-        throw err;
+
+      // An exhausted iteration budget with species still queued truncates the network.
+      // BNG2's own expansion loop (`Perl2/BNGModel.pm:2649`) just stops after
+      // `max_iter` rounds, but a caller here gets no such signal, so the reason
+      // travels out with the result rather than to the console.
+      if (iteration >= this.options.maxIterations && queue.length > 0) {
+        limitWarning =
+          `Max iterations limit (${this.options.maxIterations}) reached with ${queue.length} species still queued - network is incomplete. ${LIMIT_BREACH_HINT}`;
       }
+    } catch (e: unknown) {
+      // Limits halt expansion where they are hit, so the network stops growing at
+      // exactly the point it did before; what changes is that the caller is told.
+      // The first breach ends the run, so at most one reason is ever reported.
+      if (!(e instanceof NetworkGenerationLimitError)) throw e;
+      limitWarning = e.message;
+    } finally {
+      this.currentSpeciesList = [];
+      this.currentReactionsList = [];
     }
 
     const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(2);
 
-    const isIterationLimitReached = iteration >= this.options.maxIterations;
-    const hasRemainingQueue = queue.length > 0;
+    progressLog(limitWarning === undefined
+      ? `[NetworkGenerator] Complete: ${speciesList.length} species, ${reactionsList.length} reactions in ${totalTime}s (${iteration} iterations)`
+      : `[NetworkGenerator] Incomplete after ${totalTime}s (${iteration} iterations): ${limitWarning}`);
 
-    // NOTE: Warn when maxIterations limit was reached
-    if (isIterationLimitReached && hasRemainingQueue) {
-      console.warn(`[NetworkGenerator] WARNING: maxIterations limit (${this.options.maxIterations}) reached with ${queue.length} species still in queue. Network may be incomplete.`);
-    }
-
-    progressLog(`[NetworkGenerator] Complete: ${speciesList.length} species, ${reactionsList.length} reactions in ${totalTime}s (${iteration} iterations)`);
-
-    this.currentSpeciesList = [];
-    this.currentReactionsList = [];
-    return { species: speciesList, reactions: reactionsList };
+    return {
+      species: speciesList,
+      reactions: reactionsList,
+      complete: limitWarning === undefined,
+      warning: limitWarning,
+    };
   }
 
   // Flag to enable constraint debugging
@@ -6162,9 +6197,8 @@ export class NetworkGenerator {
     }
 
     if (speciesList.length >= this.options.maxSpecies) {
-      this.warnSpeciesLimit();
       throw this.buildLimitError(
-        `Max species limit reached (${this.options.maxSpecies}) while applying rule "${this.currentRuleName ?? 'unknown'}"`
+        `Max species limit reached (${this.options.maxSpecies}) while applying rule "${this.currentRuleName ?? 'unknown'}" - network is incomplete. ${LIMIT_BREACH_HINT}`
       );
     }
 
@@ -6233,7 +6267,7 @@ export class NetworkGenerator {
       if (product.molecules.length > this.options.maxAgg) {
         this.warnAggLimit(product.molecules.length);
         throw this.buildLimitError(
-          `Species exceeds max complex size (${this.options.maxAgg}); rule "${this.currentRuleName ?? 'unknown'}" likely produces runaway polymerization.`
+          `Species exceeds max complex size (${this.options.maxAgg}); rule "${this.currentRuleName ?? 'unknown'}" likely produces runaway polymerization - network is incomplete. ${LIMIT_BREACH_HINT}`
         );
       }
 
@@ -6274,12 +6308,6 @@ export class NetworkGenerator {
       console.warn('Species exceeds max_agg: additional occurrences suppressed');
     }
     this.aggLimitWarnings++;
-  }
-
-
-
-  private warnSpeciesLimit() {
-    this.speciesLimitWarnings++;
   }
 
   private buildLimitError(message: string): NetworkGenerationLimitError {
