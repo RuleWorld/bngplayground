@@ -568,7 +568,16 @@ export class NetworkGenerator {
     matchSymmetryBreaking: boolean;
     carryThroughPatternIndices: Set<number>;
     applyCarryThroughAnchorSkip: boolean;
+    hasRepeatedReactantPatterns: boolean;
     identicalPatternGroups: Map<string, number[]>;
+    reactantPatternBondCount: number;
+    productPatternBondCount: number;
+    hasPatternBondChange: boolean;
+    hasWildcardBoundPattern: boolean;
+    hasBondTopologyOps: boolean;
+    hasPureStateChangeOps: boolean;
+    hasSelectiveEquivalentSiteBonding: boolean;
+    requiredMoleculeNamesByPattern: string[][];
   }> = new WeakMap();
   // A rule object is immutable during generation. Cache both successful plans
   // and conservative rejections so the structural proof is paid once per rule.
@@ -2212,17 +2221,26 @@ export class NetworkGenerator {
   }
 
   /**
-   * OPT #5: Compute (and cache per rule) the N-ary rule metadata that does not
-   * depend on the species being matched: symmetry-breaking flag, carry-through
-   * (catalyst) pattern indices, the anchor-skip eligibility flag, and the groups
-   * of identical reactant patterns. Logic is unchanged from the former inline
-   * computation in applyNaryRule; it is just hoisted out of the per-species path.
+   * OPT #5: Compute (and cache per rule) the N-ary metadata that does not
+   * depend on the species being matched: matching/carry-through decisions,
+   * repeated-pattern groups, pattern topology flags, and candidate molecule names.
+   * Logic is unchanged from the former inline computations in applyNaryRule and
+   * generateNaryReaction; it is paid once per rule instead of per species/tuple.
    */
   private getNaryRuleMeta(rule: RxnRule): {
     matchSymmetryBreaking: boolean;
     carryThroughPatternIndices: Set<number>;
     applyCarryThroughAnchorSkip: boolean;
+    hasRepeatedReactantPatterns: boolean;
     identicalPatternGroups: Map<string, number[]>;
+    reactantPatternBondCount: number;
+    productPatternBondCount: number;
+    hasPatternBondChange: boolean;
+    hasWildcardBoundPattern: boolean;
+    hasBondTopologyOps: boolean;
+    hasPureStateChangeOps: boolean;
+    hasSelectiveEquivalentSiteBonding: boolean;
+    requiredMoleculeNamesByPattern: string[][];
   } {
     const cached = this.naryRuleMetaCache.get(rule);
     if (cached !== undefined) return cached;
@@ -2278,11 +2296,11 @@ export class NetworkGenerator {
       const pk = getPatternSymmetryKey(p);
       rulePatternCountsLocal.set(pk, (rulePatternCountsLocal.get(pk) || 0) + 1);
     }
-    const hasRepeatedReactantPatternsLocal = Array.from(rulePatternCountsLocal.values()).some(c => c > 1);
+    const hasRepeatedReactantPatterns = Array.from(rulePatternCountsLocal.values()).some(c => c > 1);
     const applyCarryThroughAnchorSkip = (
       carryThroughPatternIndices.size > 0 &&
       carryThroughPatternIndices.size < n &&
-      !hasRepeatedReactantPatternsLocal &&
+      !hasRepeatedReactantPatterns &&
       rule.products.length === rule.reactants.length
     );
 
@@ -2294,7 +2312,99 @@ export class NetworkGenerator {
       else identicalPatternGroups.set(key, [idx]);
     }
 
-    const meta = { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip, identicalPatternGroups };
+    const reactantPatternBondCount = patterns.reduce((sum, pattern) => sum + pattern.bondCount, 0);
+    const productPatternBondCount = rule.products.reduce((sum, pattern) => sum + pattern.bondCount, 0);
+    const hasPatternBondChange = reactantPatternBondCount !== productPatternBondCount;
+    const hasWildcardBoundPattern = patterns.some((pattern) =>
+      pattern.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
+    );
+    const hasBondTopologyOps =
+      rule.addBonds.length > 0 ||
+      rule.deleteBonds.length > 0 ||
+      rule.changeStates.length > 0 ||
+      rule.deleteMolecules.length > 0 ||
+      hasPatternBondChange;
+    const hasPureStateChangeOps =
+      rule.changeStates.length > 0 &&
+      rule.addBonds.length === 0 &&
+      rule.deleteBonds.length === 0 &&
+      rule.deleteMolecules.length === 0;
+
+    const hasSelectiveEquivalentSiteBonding = (() => {
+      if (!hasPatternBondChange) return false;
+
+      const countByName = (mol: Molecule): Map<string, { total: number; bound: number }> => {
+        const map = new Map<string, { total: number; bound: number }>();
+        for (const comp of mol.components) {
+          // Skip synthetic wildcard components added by completeMissingComponents.
+          // These are background expansions (e.g. b!? on A when only b was written in the rule)
+          // and should NOT be counted as explicitly-constrained equivalent sites.
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
+          const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
+          entry.total += 1;
+          if (comp.edges.size > 0) entry.bound += 1;
+          map.set(comp.name, entry);
+        }
+        return map;
+      };
+
+      const moleculeSignature = (mol: Molecule): string => {
+        const names = mol.components.map((comp) => comp.name).sort();
+        return `${mol.name}|${names.join(',')}`;
+      };
+
+      const reactantMolecules = patterns.flatMap((pattern) => pattern.molecules);
+      const productMolecules = rule.products.flatMap((pattern) => pattern.molecules);
+
+      for (const rMol of reactantMolecules) {
+        const sig = moleculeSignature(rMol);
+        const matches = productMolecules.filter((pMol) => moleculeSignature(pMol) === sig);
+        if (matches.length !== 1) continue;
+
+        const pMol = matches[0];
+        const rCounts = countByName(rMol);
+        const pCounts = countByName(pMol);
+
+        for (const [name, rEntry] of rCounts.entries()) {
+          if (rEntry.total < 2) continue;
+          const pEntry = pCounts.get(name);
+          if (!pEntry) continue;
+          const deltaBound = pEntry.bound - rEntry.bound;
+          if (deltaBound > 0 && deltaBound < rEntry.total) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    })();
+
+    const requiredMoleculeNamesByPattern = patterns.map((pattern) => {
+      const names: string[] = [];
+      const seen = new Set<string>();
+      for (const molecule of pattern.molecules) {
+        if (seen.has(molecule.name)) continue;
+        seen.add(molecule.name);
+        names.push(molecule.name);
+      }
+      return names;
+    });
+
+    const meta = {
+      matchSymmetryBreaking,
+      carryThroughPatternIndices,
+      applyCarryThroughAnchorSkip,
+      hasRepeatedReactantPatterns,
+      identicalPatternGroups,
+      reactantPatternBondCount,
+      productPatternBondCount,
+      hasPatternBondChange,
+      hasWildcardBoundPattern,
+      hasBondTopologyOps,
+      hasPureStateChangeOps,
+      hasSelectiveEquivalentSiteBonding,
+      requiredMoleculeNamesByPattern
+    };
     this.naryRuleMetaCache.set(rule, meta);
     return meta;
   }
@@ -2321,7 +2431,7 @@ export class NetworkGenerator {
 
     // OPT #5: this metadata depends only on the rule, not on currentSpecies, so
     // compute it once per rule and reuse across every species the rule matches.
-    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip } =
+    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip, requiredMoleculeNamesByPattern } =
       this.getNaryRuleMeta(rule);
 
 
@@ -2468,8 +2578,7 @@ export class NetworkGenerator {
         // Optimization: Inverted index lookup for molecule types required by nextPattern.
         // Sort required mols by ascending set size (most-constrained-first) to minimize
         // the initial Set copy and candidate count fed to canPossiblyMatch/findAllMaps.
-        const rawRequired = nextPattern.molecules.map(m => m.name);
-        const uniqueMols = rawRequired.length <= 1 ? rawRequired : Array.from(new Set(rawRequired));
+        const uniqueMols = requiredMoleculeNamesByPattern[nextPatternIdx];
         const setsWithSizes = uniqueMols.map(name => ({
           name,
           size: this.speciesByMoleculeIndex.get(name)?.size ?? 0,
@@ -2576,14 +2685,17 @@ export class NetworkGenerator {
     // However, our outer loop visits each embedding combo.
     // We aggregate them by (reactantIndices, productIndices).
 
-    // Distinct reactant patterns, used below only as a structural guard.
-    const rulePatternCounts = new Map<string, number>();
-    for (const p of patterns) {
-      const s = getPatternSymmetryKey(p);
-      rulePatternCounts.set(s, (rulePatternCounts.get(s) || 0) + 1);
-    }
-    const hasRepeatedReactantPatterns = Array.from(rulePatternCounts.values()).some((count) => count > 1);
 
+    const {
+      hasRepeatedReactantPatterns,
+      identicalPatternGroups,
+      reactantPatternBondCount,
+      productPatternBondCount,
+      hasWildcardBoundPattern,
+      hasBondTopologyOps,
+      hasPureStateChangeOps,
+      hasSelectiveEquivalentSiteBonding
+    } = this.getNaryRuleMeta(rule);
     // BIO-NETGEN PARITY: the statistical divisor.
     //
     // `RxnRule::find_reaction_center` (RxnRule.pm:2659-2849) derives
@@ -2626,83 +2738,6 @@ export class NetworkGenerator {
       totalDegeneracy *= kDeg;
     }
 
-    const countGraphBonds = (graph: SpeciesGraph): number => {
-      let edgeEndpoints = 0;
-      for (const mol of graph.molecules) {
-        for (const comp of mol.components) {
-          edgeEndpoints += comp.edges.size;
-        }
-      }
-      return Math.floor(edgeEndpoints / 2);
-    };
-
-    const reactantPatternBondCount = patterns.reduce((sum, p) => sum + countGraphBonds(p), 0);
-    const productPatternBondCount = rule.products.reduce((sum, p) => sum + countGraphBonds(p), 0);
-    const hasPatternBondChange = reactantPatternBondCount !== productPatternBondCount;
-
-    const hasSelectiveEquivalentSiteBonding = (() => {
-      if (!hasPatternBondChange) return false;
-
-      const countByName = (mol: Molecule): Map<string, { total: number; bound: number }> => {
-        const map = new Map<string, { total: number; bound: number }>();
-        for (const comp of mol.components) {
-          // Skip synthetic wildcard components added by completeMissingComponents.
-          // These are background expansions (e.g. b!? on A when only b was written in the rule)
-          // and should NOT be counted as explicitly-constrained equivalent sites.
-          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
-          const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
-          entry.total += 1;
-          if (comp.edges.size > 0) entry.bound += 1;
-          map.set(comp.name, entry);
-        }
-        return map;
-      };
-
-      const moleculeSignature = (mol: Molecule): string => {
-        const names = mol.components.map((comp) => comp.name).sort();
-        return `${mol.name}|${names.join(',')}`;
-      };
-
-      const reactantMolecules = patterns.flatMap((pat) => pat.molecules);
-      const productMolecules = rule.products.flatMap((pat) => pat.molecules);
-
-      for (const rMol of reactantMolecules) {
-        const sig = moleculeSignature(rMol);
-        const matches = productMolecules.filter((pMol) => moleculeSignature(pMol) === sig);
-        if (matches.length !== 1) continue;
-
-        const pMol = matches[0];
-        const rCounts = countByName(rMol);
-        const pCounts = countByName(pMol);
-
-        for (const [name, rEntry] of rCounts.entries()) {
-          if (rEntry.total < 2) continue;
-          const pEntry = pCounts.get(name);
-          if (!pEntry) continue;
-          const deltaBound = pEntry.bound - rEntry.bound;
-          if (deltaBound > 0 && deltaBound < rEntry.total) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-    })();
-
-    const hasWildcardBoundPattern = patterns.some((pat) =>
-      pat.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
-    );
-    const hasBondTopologyOps =
-      rule.addBonds.length > 0 ||
-      rule.deleteBonds.length > 0 ||
-      rule.changeStates.length > 0 ||
-      rule.deleteMolecules.length > 0 ||
-      hasPatternBondChange;
-    const hasPureStateChangeOps =
-      rule.changeStates.length > 0 &&
-      rule.addBonds.length === 0 &&
-      rule.deleteBonds.length === 0 &&
-      rule.deleteMolecules.length === 0;
 
     // For pure state-change rules, symmetry-broken matching is disabled
     // (matchSymmetryBreaking=false) so every distinct assignment is enumerated as
@@ -2758,16 +2793,6 @@ export class NetworkGenerator {
     // `ruleSymmetryFactor` divides by factorial(groupSize) for each identical-pattern group,
     // but for a concrete species tuple we should divide only by repeats of the SAME species
     // within that group (e.g., A+A distinct pair: no 1/2; A+A same species: 1/2 applies).
-    const identicalPatternGroups = new Map<string, number[]>();
-    // Track whether a tuple-aware combinatorial correction was applied; this will
-    // prevent the SB-enumeration fallback from *lowering* that corrected value.
-    let tupleAwareCorrectionApplied = false;
-    for (let idx = 0; idx < n; idx++) {
-      const key = getPatternSymmetryKey(patterns[idx]);
-      const group = identicalPatternGroups.get(key);
-      if (group) group.push(idx);
-      else identicalPatternGroups.set(key, [idx]);
-    }
 
     for (const group of identicalPatternGroups.values()) {
       if (group.length < 2) continue;
