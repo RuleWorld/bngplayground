@@ -52,7 +52,7 @@
     "predev": "npm run build --workspace @bngplayground/rulehub",
     "dev": "tsx src/index.ts",
     "prebuild": "npm run build --workspace @bngplayground/rulehub",
-    "build": "tsc && vite build --config apps/vite.config.ts && node apps/verify-bundle.mjs",
+    "build": "tsc && node ../../scripts/normalize-esm.mjs dist && vite build --config apps/vite.config.ts && node apps/verify-bundle.mjs",
     "test": "vitest run"
   },
   "dependencies": {

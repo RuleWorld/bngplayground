@@ -50,7 +50,7 @@
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../scripts/normalize-esm.mjs dist",
     "test": "vitest run",
     "test:watch": "vitest"
   },
