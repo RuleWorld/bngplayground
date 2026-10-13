@@ -7,7 +7,7 @@ import { SpeciesGraph } from './core/SpeciesGraph';
 import { Species } from './core/Species';
 import { RxnRule } from './core/RxnRule';
 import { Rxn } from './core/Rxn';
-import { GraphCanonicalizer } from './core/Canonical';
+import { GraphCanonicalizer, clearCanonicalCache } from './core/Canonical';
 import { GraphMatcher, clearMatchCache } from './core/Matcher';
 import type { MatchMap } from './core/Matcher';
 import { countEmbeddingDegeneracy, countRxnCenterImages } from './core/degeneracy';
@@ -27,6 +27,15 @@ import { computeRuleDivisor } from './core/RuleStatFactor';
  */
 const RXN_CENTER_IMAGE_BUDGET = 20000;
 
+/**
+ * Appended to every limit error: a breach is the caller's cue to raise a limit or
+ * to change method, so the message names the ways out, not just the number that
+ * stopped expansion.
+ */
+const LIMIT_BREACH_HINT =
+  'Raise max_species / max_reactions / max_iter in the generate_network() action, ' +
+  'or simulate the model network-free with simulate({method: "nf"}).';
+
 export class NetworkGenerationLimitError extends Error {
   constructor(
     message: string,
@@ -37,6 +46,23 @@ export class NetworkGenerationLimitError extends Error {
     super(message);
     this.name = 'NetworkGenerationLimitError';
   }
+}
+
+/**
+ * Outcome of one network expansion.
+ *
+ * `complete: false` means a generation limit stopped expansion before the rule set
+ * was exhausted, so `species`/`reactions` are a truncated prefix of the real
+ * network and any trajectory computed from them is wrong. The reason travels with
+ * the result so callers can surface it instead of presenting a cut-off network as
+ * if it were complete.
+ */
+export interface NetworkGenerationResult {
+  species: Species[];
+  reactions: Rxn[];
+  complete: boolean;
+  /** Why expansion stopped early. Present exactly when `complete` is false. */
+  warning?: string;
 }
 
 
@@ -542,7 +568,16 @@ export class NetworkGenerator {
     matchSymmetryBreaking: boolean;
     carryThroughPatternIndices: Set<number>;
     applyCarryThroughAnchorSkip: boolean;
+    hasRepeatedReactantPatterns: boolean;
     identicalPatternGroups: Map<string, number[]>;
+    reactantPatternBondCount: number;
+    productPatternBondCount: number;
+    hasPatternBondChange: boolean;
+    hasWildcardBoundPattern: boolean;
+    hasBondTopologyOps: boolean;
+    hasPureStateChangeOps: boolean;
+    hasSelectiveEquivalentSiteBonding: boolean;
+    requiredMoleculeNamesByPattern: string[][];
   }> = new WeakMap();
   // A rule object is immutable during generation. Cache both successful plans
   // and conservative rejections so the structural proof is paid once per rule.
@@ -557,7 +592,6 @@ export class NetworkGenerator {
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
   private aggLimitWarnings = 0;
-  private speciesLimitWarnings = 0;
   private currentRuleName: string | null = null;
   private currentSpeciesList: Species[] = [];
   private currentReactionsList: Rxn[] = [];
@@ -886,8 +920,11 @@ export class NetworkGenerator {
    *    and propagates `MoveConnected` transitions across connected complexes.
    * 8. **Compartment Adjacency Validation**: Verifies that newly formed bonds only span identical or adjacent compartments,
    *    rejecting invalid trans-compartmental product topologies.
-   * 9. **Resource Constraint Monitoring**: Safeguards the execution context by throwing error limits or gracefully
-   *    returning partial networks if max species, max reactions, max iterations, max complex size, or JS heap memory limits are exceeded.
+   * 9. **Resource Constraint Monitoring**: Stops expansion when a max species, max reactions,
+   *    max iterations, or max complex size limit is breached (and fails outright on the JS heap
+   *    limit). A breach means the network is INCOMPLETE, so the result comes back with
+   *    `complete: false` and a user-facing `warning`: a truncated network must never be
+   *    presented as a finished one.
    *
    * Invariants:
    * - **Browser-API-Free**: This function relies on zero browser or DOM APIs and is fully compatible with server-side Node.js, Web Worker, and headless MCP contexts.
@@ -896,21 +933,19 @@ export class NetworkGenerator {
    * @param rules - The reaction rules (with defined rate constants, reactants, products, and constraints) to expand.
    * @param onProgress - Optional callback invoked periodically with current generation metrics.
    * @param signal - Optional AbortSignal to cancel the network generation.
-   * @returns A promise resolving to an object containing arrays of generated Species and Rxn reactions.
-   * @throws {NetworkGenerationLimitError} If species, reaction, iteration, or memory thresholds are breached.
+   * @returns A promise resolving to the generated Species and Rxn arrays plus how complete the
+   *    expansion was (see {@link NetworkGenerationResult}).
    */
   async generate(
     seedSpecies: SpeciesGraph[],
     rules: RxnRule[],
     onProgress?: (progress: GeneratorProgress) => void,
     signal?: AbortSignal
-  ): Promise<{ species: Species[]; reactions: Rxn[] }> {
+  ): Promise<NetworkGenerationResult> {
 
     this.startTime = Date.now();
     this.lastMemoryCheck = this.startTime;
     this.aggLimitWarnings = 0;
-
-    this.speciesLimitWarnings = 0;
     this.currentRuleName = null;
 
     // Reset inverted index and caches
@@ -918,6 +953,7 @@ export class NetworkGenerator {
     this.structuralHashMap.clear();
     this.pureStateChangePlanCache = new WeakMap();
     clearMatchCache();
+    clearCanonicalCache();
 
     const speciesMap = new Map<string, Species>();
     const speciesList: Species[] = [];
@@ -978,6 +1014,8 @@ export class NetworkGenerator {
     let lastLoggedSpeciesCount = speciesList.length;
     const logInterval = 50; // Log every 50 new species
     let lastProgressCallback = onProgress ? Date.now() : 0;
+    // Set when a generation limit truncates the network; travels out with the result.
+    let limitWarning: string | undefined;
 
     progressLog(`[NetworkGenerator] Starting with ${speciesList.length} seed species, ${rules.length} rules`);
 
@@ -1076,7 +1114,7 @@ export class NetworkGenerator {
 
             if (reactionsList.length >= this.options.maxReactions) {
               throw this.buildLimitError(
-                `Reached max reactions limit (${this.options.maxReactions}) while applying rule "${this.currentRuleName ?? 'unknown'}"`
+                `Reached max reactions limit (${this.options.maxReactions}) while applying rule "${this.currentRuleName ?? 'unknown'}" - network is incomplete. ${LIMIT_BREACH_HINT}`
               );
             }
           }
@@ -1117,32 +1155,38 @@ export class NetworkGenerator {
           }
         }
       }
-    } catch (e: unknown) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      // Catch limit errors and return partial results
-      if (err.name === 'NetworkGenerationLimitError') {
-        console.warn(`Network generation limit reached: ${err.message}`);
-        // Continue and return partial results
-      } else {
-        throw err;
+
+      // An exhausted iteration budget with species still queued truncates the network.
+      // BNG2's own expansion loop (`Perl2/BNGModel.pm:2649`) just stops after
+      // `max_iter` rounds, but a caller here gets no such signal, so the reason
+      // travels out with the result rather than to the console.
+      if (iteration >= this.options.maxIterations && queue.length > 0) {
+        limitWarning =
+          `Max iterations limit (${this.options.maxIterations}) reached with ${queue.length} species still queued - network is incomplete. ${LIMIT_BREACH_HINT}`;
       }
+    } catch (e: unknown) {
+      // Limits halt expansion where they are hit, so the network stops growing at
+      // exactly the point it did before; what changes is that the caller is told.
+      // The first breach ends the run, so at most one reason is ever reported.
+      if (!(e instanceof NetworkGenerationLimitError)) throw e;
+      limitWarning = e.message;
+    } finally {
+      this.currentSpeciesList = [];
+      this.currentReactionsList = [];
     }
 
     const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(2);
 
-    const isIterationLimitReached = iteration >= this.options.maxIterations;
-    const hasRemainingQueue = queue.length > 0;
+    progressLog(limitWarning === undefined
+      ? `[NetworkGenerator] Complete: ${speciesList.length} species, ${reactionsList.length} reactions in ${totalTime}s (${iteration} iterations)`
+      : `[NetworkGenerator] Incomplete after ${totalTime}s (${iteration} iterations): ${limitWarning}`);
 
-    // NOTE: Warn when maxIterations limit was reached
-    if (isIterationLimitReached && hasRemainingQueue) {
-      console.warn(`[NetworkGenerator] WARNING: maxIterations limit (${this.options.maxIterations}) reached with ${queue.length} species still in queue. Network may be incomplete.`);
-    }
-
-    progressLog(`[NetworkGenerator] Complete: ${speciesList.length} species, ${reactionsList.length} reactions in ${totalTime}s (${iteration} iterations)`);
-
-    this.currentSpeciesList = [];
-    this.currentReactionsList = [];
-    return { species: speciesList, reactions: reactionsList };
+    return {
+      species: speciesList,
+      reactions: reactionsList,
+      complete: limitWarning === undefined,
+      warning: limitWarning,
+    };
   }
 
   // Flag to enable constraint debugging
@@ -1166,8 +1210,7 @@ export class NetworkGenerator {
       if (!species.graph.adjacencyBitset) {
         species.graph.buildAdjacencyBitset();
       }
-      const maps = profiledFindAllMaps(pattern, species.graph);
-      return maps.length > 0;
+      return profiledFindFirstMap(pattern, species.graph) !== null;
     };
 
     // Reactant mapping based on index (0-based)
@@ -1238,8 +1281,7 @@ export class NetworkGenerator {
       if (!species.graph.adjacencyBitset) {
         species.graph.buildAdjacencyBitset();
       }
-      const maps = profiledFindAllMaps(pattern, species.graph);
-      return maps.length > 0;
+      return profiledFindFirstMap(pattern, species.graph) !== null;
     };
 
     if (rule.excludeProducts) {
@@ -1498,7 +1540,7 @@ export class NetworkGenerator {
     const matches: MatchMap[] = [];
     if (rule.isMatchOnce) {
       const firstMap = profiledFindFirstMap(pattern, reactantSpecies.graph, { symmetryBreaking: true });
-      if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap) &&
+      if (firstMap &&
         this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, firstMap)) {
         matches.push(firstMap);
       }
@@ -1507,7 +1549,6 @@ export class NetworkGenerator {
       const candidateMaps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
       for (const match of candidateMaps) {
         if (
-          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
           this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
         ) {
           matches.push(match);
@@ -1999,46 +2040,6 @@ export class NetworkGenerator {
     }
   }
 
-  private matchRespectsExplicitComponentBondCounts(
-    pattern: SpeciesGraph,
-    target: SpeciesGraph,
-    match: MatchMap
-  ): boolean {
-    for (const [patternMolIdx, targetMolIdx] of match.moleculeMap.entries()) {
-      const patternMol = pattern.molecules[patternMolIdx];
-      const targetMol = target.molecules[targetMolIdx];
-      if (!patternMol || !targetMol) return false;
-
-      for (let patternCompIdx = 0; patternCompIdx < patternMol.components.length; patternCompIdx++) {
-        const patternComp = patternMol.components[patternCompIdx];
-
-        if (patternComp.wildcard) continue;
-
-        const targetCompKey = match.componentMap.get(`${patternMolIdx}.${patternCompIdx}`);
-        if (!targetCompKey) return false;
-
-        // ⚡ Bolt: Use slice directly to avoid split() array allocation
-        const targetCompIdx = Number(targetCompKey.slice(targetCompKey.indexOf('.') + 1));
-        const targetComp = targetMol.components[targetCompIdx];
-        if (!targetComp) return false;
-
-        // Plain components without explicit bond constraints are unconstrained in BNGL
-        // rule matching and may bind to either bound or unbound target sites.
-        if (patternComp.edges.size === 0) {
-          continue;
-        }
-
-        // Reaction-rule parity: an explicit bonded site like b!1 should not match a site
-        // with additional bonds (e.g., b!1!2) unless wildcard semantics are used.
-        if (targetComp.edges.size !== patternComp.edges.size) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
   /**
    * The rule's molecule-level correspondence between reactants and products.
    *
@@ -2220,17 +2221,26 @@ export class NetworkGenerator {
   }
 
   /**
-   * OPT #5: Compute (and cache per rule) the N-ary rule metadata that does not
-   * depend on the species being matched: symmetry-breaking flag, carry-through
-   * (catalyst) pattern indices, the anchor-skip eligibility flag, and the groups
-   * of identical reactant patterns. Logic is unchanged from the former inline
-   * computation in applyNaryRule; it is just hoisted out of the per-species path.
+   * OPT #5: Compute (and cache per rule) the N-ary metadata that does not
+   * depend on the species being matched: matching/carry-through decisions,
+   * repeated-pattern groups, pattern topology flags, and candidate molecule names.
+   * Logic is unchanged from the former inline computations in applyNaryRule and
+   * generateNaryReaction; it is paid once per rule instead of per species/tuple.
    */
   private getNaryRuleMeta(rule: RxnRule): {
     matchSymmetryBreaking: boolean;
     carryThroughPatternIndices: Set<number>;
     applyCarryThroughAnchorSkip: boolean;
+    hasRepeatedReactantPatterns: boolean;
     identicalPatternGroups: Map<string, number[]>;
+    reactantPatternBondCount: number;
+    productPatternBondCount: number;
+    hasPatternBondChange: boolean;
+    hasWildcardBoundPattern: boolean;
+    hasBondTopologyOps: boolean;
+    hasPureStateChangeOps: boolean;
+    hasSelectiveEquivalentSiteBonding: boolean;
+    requiredMoleculeNamesByPattern: string[][];
   } {
     const cached = this.naryRuleMetaCache.get(rule);
     if (cached !== undefined) return cached;
@@ -2286,11 +2296,11 @@ export class NetworkGenerator {
       const pk = getPatternSymmetryKey(p);
       rulePatternCountsLocal.set(pk, (rulePatternCountsLocal.get(pk) || 0) + 1);
     }
-    const hasRepeatedReactantPatternsLocal = Array.from(rulePatternCountsLocal.values()).some(c => c > 1);
+    const hasRepeatedReactantPatterns = Array.from(rulePatternCountsLocal.values()).some(c => c > 1);
     const applyCarryThroughAnchorSkip = (
       carryThroughPatternIndices.size > 0 &&
       carryThroughPatternIndices.size < n &&
-      !hasRepeatedReactantPatternsLocal &&
+      !hasRepeatedReactantPatterns &&
       rule.products.length === rule.reactants.length
     );
 
@@ -2302,7 +2312,99 @@ export class NetworkGenerator {
       else identicalPatternGroups.set(key, [idx]);
     }
 
-    const meta = { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip, identicalPatternGroups };
+    const reactantPatternBondCount = patterns.reduce((sum, pattern) => sum + pattern.bondCount, 0);
+    const productPatternBondCount = rule.products.reduce((sum, pattern) => sum + pattern.bondCount, 0);
+    const hasPatternBondChange = reactantPatternBondCount !== productPatternBondCount;
+    const hasWildcardBoundPattern = patterns.some((pattern) =>
+      pattern.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
+    );
+    const hasBondTopologyOps =
+      rule.addBonds.length > 0 ||
+      rule.deleteBonds.length > 0 ||
+      rule.changeStates.length > 0 ||
+      rule.deleteMolecules.length > 0 ||
+      hasPatternBondChange;
+    const hasPureStateChangeOps =
+      rule.changeStates.length > 0 &&
+      rule.addBonds.length === 0 &&
+      rule.deleteBonds.length === 0 &&
+      rule.deleteMolecules.length === 0;
+
+    const hasSelectiveEquivalentSiteBonding = (() => {
+      if (!hasPatternBondChange) return false;
+
+      const countByName = (mol: Molecule): Map<string, { total: number; bound: number }> => {
+        const map = new Map<string, { total: number; bound: number }>();
+        for (const comp of mol.components) {
+          // Skip synthetic wildcard components added by completeMissingComponents.
+          // These are background expansions (e.g. b!? on A when only b was written in the rule)
+          // and should NOT be counted as explicitly-constrained equivalent sites.
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
+          const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
+          entry.total += 1;
+          if (comp.edges.size > 0) entry.bound += 1;
+          map.set(comp.name, entry);
+        }
+        return map;
+      };
+
+      const moleculeSignature = (mol: Molecule): string => {
+        const names = mol.components.map((comp) => comp.name).sort();
+        return `${mol.name}|${names.join(',')}`;
+      };
+
+      const reactantMolecules = patterns.flatMap((pattern) => pattern.molecules);
+      const productMolecules = rule.products.flatMap((pattern) => pattern.molecules);
+
+      for (const rMol of reactantMolecules) {
+        const sig = moleculeSignature(rMol);
+        const matches = productMolecules.filter((pMol) => moleculeSignature(pMol) === sig);
+        if (matches.length !== 1) continue;
+
+        const pMol = matches[0];
+        const rCounts = countByName(rMol);
+        const pCounts = countByName(pMol);
+
+        for (const [name, rEntry] of rCounts.entries()) {
+          if (rEntry.total < 2) continue;
+          const pEntry = pCounts.get(name);
+          if (!pEntry) continue;
+          const deltaBound = pEntry.bound - rEntry.bound;
+          if (deltaBound > 0 && deltaBound < rEntry.total) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    })();
+
+    const requiredMoleculeNamesByPattern = patterns.map((pattern) => {
+      const names: string[] = [];
+      const seen = new Set<string>();
+      for (const molecule of pattern.molecules) {
+        if (seen.has(molecule.name)) continue;
+        seen.add(molecule.name);
+        names.push(molecule.name);
+      }
+      return names;
+    });
+
+    const meta = {
+      matchSymmetryBreaking,
+      carryThroughPatternIndices,
+      applyCarryThroughAnchorSkip,
+      hasRepeatedReactantPatterns,
+      identicalPatternGroups,
+      reactantPatternBondCount,
+      productPatternBondCount,
+      hasPatternBondChange,
+      hasWildcardBoundPattern,
+      hasBondTopologyOps,
+      hasPureStateChangeOps,
+      hasSelectiveEquivalentSiteBonding,
+      requiredMoleculeNamesByPattern
+    };
     this.naryRuleMetaCache.set(rule, meta);
     return meta;
   }
@@ -2329,7 +2431,7 @@ export class NetworkGenerator {
 
     // OPT #5: this metadata depends only on the rule, not on currentSpecies, so
     // compute it once per rule and reuse across every species the rule matches.
-    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip } =
+    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip, requiredMoleculeNamesByPattern } =
       this.getNaryRuleMeta(rule);
 
 
@@ -2352,7 +2454,7 @@ export class NetworkGenerator {
 
       if (rule.isMatchOnce) {
         const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
-        if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap) &&
+        if (firstMap &&
           this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, firstMap)) {
           matches.push(firstMap);
         }
@@ -2362,7 +2464,6 @@ export class NetworkGenerator {
         const candidateMaps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
         for (const match of candidateMaps) {
           if (
-            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
             this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
           ) {
             matches.push(match);
@@ -2477,8 +2578,7 @@ export class NetworkGenerator {
         // Optimization: Inverted index lookup for molecule types required by nextPattern.
         // Sort required mols by ascending set size (most-constrained-first) to minimize
         // the initial Set copy and candidate count fed to canPossiblyMatch/findAllMaps.
-        const rawRequired = nextPattern.molecules.map(m => m.name);
-        const uniqueMols = rawRequired.length <= 1 ? rawRequired : Array.from(new Set(rawRequired));
+        const uniqueMols = requiredMoleculeNamesByPattern[nextPatternIdx];
         const setsWithSizes = uniqueMols.map(name => ({
           name,
           size: this.speciesByMoleculeIndex.get(name)?.size ?? 0,
@@ -2495,12 +2595,14 @@ export class NetworkGenerator {
           if (candidateSet.size === 0) break;
         }
 
-        const candidates = candidateSet ? Array.from(candidateSet) : [];
+        // candidateSet is always a snapshot copy of the inverted-index sets. Iterate it
+        // directly so each recursive partner search does not allocate a candidates array.
+        if (!candidateSet) return;
         // Carry-through patterns (unchanged by rule ops) should only contribute ONE match
         // per candidate species. Their monomer-level multiplicity does NOT add to the rate
         // (only changed-reactant embeddings count toward BNG2 stat factors).
         const isCarryThroughPattern = carryThroughPatternIndices.has(nextPatternIdx);
-        for (const candidateIdx of candidates) {
+        for (const candidateIdx of candidateSet) {
           // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
           const candidateSpecies = allSpecies[candidateIdx];
           // O(1) early structural pruning before calling any matches/isomorphisms
@@ -2512,7 +2614,7 @@ export class NetworkGenerator {
 
           if (limitToSingleMatch) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-            if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap) &&
+            if (firstCandMap &&
               this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, firstCandMap)) {
               candMaps.push(firstCandMap);
             }
@@ -2522,7 +2624,6 @@ export class NetworkGenerator {
             const candidateMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
             for (const candMatch of candidateMaps) {
               if (
-                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
                 this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
               ) {
                 candMaps.push(candMatch);
@@ -2584,14 +2685,17 @@ export class NetworkGenerator {
     // However, our outer loop visits each embedding combo.
     // We aggregate them by (reactantIndices, productIndices).
 
-    // Distinct reactant patterns, used below only as a structural guard.
-    const rulePatternCounts = new Map<string, number>();
-    for (const p of patterns) {
-      const s = getPatternSymmetryKey(p);
-      rulePatternCounts.set(s, (rulePatternCounts.get(s) || 0) + 1);
-    }
-    const hasRepeatedReactantPatterns = Array.from(rulePatternCounts.values()).some((count) => count > 1);
 
+    const {
+      hasRepeatedReactantPatterns,
+      identicalPatternGroups,
+      reactantPatternBondCount,
+      productPatternBondCount,
+      hasWildcardBoundPattern,
+      hasBondTopologyOps,
+      hasPureStateChangeOps,
+      hasSelectiveEquivalentSiteBonding
+    } = this.getNaryRuleMeta(rule);
     // BIO-NETGEN PARITY: the statistical divisor.
     //
     // `RxnRule::find_reaction_center` (RxnRule.pm:2659-2849) derives
@@ -2634,83 +2738,6 @@ export class NetworkGenerator {
       totalDegeneracy *= kDeg;
     }
 
-    const countGraphBonds = (graph: SpeciesGraph): number => {
-      let edgeEndpoints = 0;
-      for (const mol of graph.molecules) {
-        for (const comp of mol.components) {
-          edgeEndpoints += comp.edges.size;
-        }
-      }
-      return Math.floor(edgeEndpoints / 2);
-    };
-
-    const reactantPatternBondCount = patterns.reduce((sum, p) => sum + countGraphBonds(p), 0);
-    const productPatternBondCount = rule.products.reduce((sum, p) => sum + countGraphBonds(p), 0);
-    const hasPatternBondChange = reactantPatternBondCount !== productPatternBondCount;
-
-    const hasSelectiveEquivalentSiteBonding = (() => {
-      if (!hasPatternBondChange) return false;
-
-      const countByName = (mol: Molecule): Map<string, { total: number; bound: number }> => {
-        const map = new Map<string, { total: number; bound: number }>();
-        for (const comp of mol.components) {
-          // Skip synthetic wildcard components added by completeMissingComponents.
-          // These are background expansions (e.g. b!? on A when only b was written in the rule)
-          // and should NOT be counted as explicitly-constrained equivalent sites.
-          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
-          const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
-          entry.total += 1;
-          if (comp.edges.size > 0) entry.bound += 1;
-          map.set(comp.name, entry);
-        }
-        return map;
-      };
-
-      const moleculeSignature = (mol: Molecule): string => {
-        const names = mol.components.map((comp) => comp.name).sort();
-        return `${mol.name}|${names.join(',')}`;
-      };
-
-      const reactantMolecules = patterns.flatMap((pat) => pat.molecules);
-      const productMolecules = rule.products.flatMap((pat) => pat.molecules);
-
-      for (const rMol of reactantMolecules) {
-        const sig = moleculeSignature(rMol);
-        const matches = productMolecules.filter((pMol) => moleculeSignature(pMol) === sig);
-        if (matches.length !== 1) continue;
-
-        const pMol = matches[0];
-        const rCounts = countByName(rMol);
-        const pCounts = countByName(pMol);
-
-        for (const [name, rEntry] of rCounts.entries()) {
-          if (rEntry.total < 2) continue;
-          const pEntry = pCounts.get(name);
-          if (!pEntry) continue;
-          const deltaBound = pEntry.bound - rEntry.bound;
-          if (deltaBound > 0 && deltaBound < rEntry.total) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-    })();
-
-    const hasWildcardBoundPattern = patterns.some((pat) =>
-      pat.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
-    );
-    const hasBondTopologyOps =
-      rule.addBonds.length > 0 ||
-      rule.deleteBonds.length > 0 ||
-      rule.changeStates.length > 0 ||
-      rule.deleteMolecules.length > 0 ||
-      hasPatternBondChange;
-    const hasPureStateChangeOps =
-      rule.changeStates.length > 0 &&
-      rule.addBonds.length === 0 &&
-      rule.deleteBonds.length === 0 &&
-      rule.deleteMolecules.length === 0;
 
     // For pure state-change rules, symmetry-broken matching is disabled
     // (matchSymmetryBreaking=false) so every distinct assignment is enumerated as
@@ -2766,16 +2793,8 @@ export class NetworkGenerator {
     // `ruleSymmetryFactor` divides by factorial(groupSize) for each identical-pattern group,
     // but for a concrete species tuple we should divide only by repeats of the SAME species
     // within that group (e.g., A+A distinct pair: no 1/2; A+A same species: 1/2 applies).
-    const identicalPatternGroups = new Map<string, number[]>();
-    // Track whether a tuple-aware combinatorial correction was applied; this will
-    // prevent the SB-enumeration fallback from *lowering* that corrected value.
     let tupleAwareCorrectionApplied = false;
-    for (let idx = 0; idx < n; idx++) {
-      const key = getPatternSymmetryKey(patterns[idx]);
-      const group = identicalPatternGroups.get(key);
-      if (group) group.push(idx);
-      else identicalPatternGroups.set(key, [idx]);
-    }
+
 
     for (const group of identicalPatternGroups.values()) {
       if (group.length < 2) continue;
@@ -2899,7 +2918,6 @@ export class NetworkGenerator {
         for (let k = 0; k < n; k++) {
           const sbMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: true })
             .filter((m) =>
-              this.matchRespectsExplicitComponentBondCounts(patterns[k], reactantSpeciesList[k].graph, m) &&
               this.matchRespectsProductImpliedFreeConstraints(rule, patterns[k], reactantSpeciesList[k].graph, m)
             );
           // Fall back to the provided match (if any) to ensure at least one representative
@@ -6155,16 +6173,15 @@ export class NetworkGenerator {
       canonical = profiledCanonicalize(graph);
     }
 
-    if (speciesMap.has(canonical)) {
+    const existing = speciesMap.get(canonical);
+    if (existing !== undefined) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      const existing = speciesMap.get(canonical);
-      if (existing) return existing;
+      return existing;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {
-      this.warnSpeciesLimit();
       throw this.buildLimitError(
-        `Max species limit reached (${this.options.maxSpecies}) while applying rule "${this.currentRuleName ?? 'unknown'}"`
+        `Max species limit reached (${this.options.maxSpecies}) while applying rule "${this.currentRuleName ?? 'unknown'}" - network is incomplete. ${LIMIT_BREACH_HINT}`
       );
     }
 
@@ -6193,7 +6210,10 @@ export class NetworkGenerator {
    * Add a species' molecules to the inverted index for quick lookup when matching
    */
   private indexSpecies(species: Species): void {
+    const indexedNames = new Set<string>();
     for (const m of species.graph.molecules) {
+      if (indexedNames.has(m.name)) continue;
+      indexedNames.add(m.name);
       const set = this.speciesByMoleculeIndex.get(m.name) ?? new Set<number>();
       set.add(species.index);
       this.speciesByMoleculeIndex.set(m.name, set);
@@ -6233,7 +6253,7 @@ export class NetworkGenerator {
       if (product.molecules.length > this.options.maxAgg) {
         this.warnAggLimit(product.molecules.length);
         throw this.buildLimitError(
-          `Species exceeds max complex size (${this.options.maxAgg}); rule "${this.currentRuleName ?? 'unknown'}" likely produces runaway polymerization.`
+          `Species exceeds max complex size (${this.options.maxAgg}); rule "${this.currentRuleName ?? 'unknown'}" likely produces runaway polymerization - network is incomplete. ${LIMIT_BREACH_HINT}`
         );
       }
 
@@ -6274,12 +6294,6 @@ export class NetworkGenerator {
       console.warn('Species exceeds max_agg: additional occurrences suppressed');
     }
     this.aggLimitWarnings++;
-  }
-
-
-
-  private warnSpeciesLimit() {
-    this.speciesLimitWarnings++;
   }
 
   private buildLimitError(message: string): NetworkGenerationLimitError {

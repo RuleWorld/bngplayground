@@ -554,18 +554,20 @@ export async function generateExpandedNetwork(
     // maxStoich: Limits size of complexes (prevent infinite polymerization).
     const networkOpts = inputModel.networkOptions || {};
     const maxStoich = networkOpts.maxStoich ? new Map(Object.entries(networkOpts.maxStoich)) : 500;
+    // BNG2's default max_iter is 100 (`Perl2/BNGModel.pm:2517`, `'max_iter' => 100`).
+    // We used 5000, which let expansion run fifty times past the point where
+    // BioNetGen declares the network incomplete — a different network from the
+    // reference, not a slower one. A model that legitimately needs more must
+    // say so in its own `generate_network` action, which is what `maxIter` reads.
+    const maxIterations = networkOpts.maxIter ?? 100;
 
-    // Instantiate the core generator (Parity with BNG2 Network3 C++ engine)
+    // Instantiate the core generator (Parity with BNG2 Network3 C++ engine).
+    // Breaching any of these limits raises NetworkGenerationLimitError instead of
+    // returning a truncated network, so a cap never masquerades as a complete one.
     const generator = new NetworkGenerator({
         maxSpecies: networkOpts.maxSpecies ?? 20000,
         maxReactions: networkOpts.maxReactions ?? 100000,
-        // BNG2's default is 100 (`Perl2/BNGModel.pm:2517`, `'max_iter' => 100`).
-        // We used 5000, which let expansion run fifty times past the point where
-        // BioNetGen declares the network incomplete — a different network from the
-        // reference, not a slower one. A model that legitimately needs more must
-        // say so in its own `generate_network` action, which is what `maxIter`
-        // above reads.
-        maxIterations: networkOpts.maxIter ?? 100,
+        maxIterations,
         maxAgg: networkOpts.maxAgg ?? 500,
         maxStoich,
         // Model Compartment definitions for volume scaling
@@ -581,10 +583,6 @@ export async function generateExpandedNetwork(
         parameters: new Map(Object.entries(inputModel.parameters || {}))
     });
 
-    // ... (rest of generation code same) ... 
-    // (omitted for brevity, skipping to result mapping)
-    // Actually I can't skip with replace_file_content unless I replace a chunk.
-
     // Set up progress callback
     // Update frequency: 250ms chosen to balance UI responsiveness
     let lastProgressTime = 0;
@@ -596,23 +594,20 @@ export async function generateExpandedNetwork(
         }
     };
 
-    let result: { species: Species[]; reactions: Rxn[] };
-    try {
-        result = await generator.generate(__seedSpecies, rules, throttledProgressCallback);
-        if (VERBOSE_NETEXP_DEBUG) console.log(`[NetExpDebug] Generated ${result.reactions.length} reactions from ${rules.length} rules.`);
-        // Final progress update
-        onProgress({
-            iteration: networkOpts.maxIter ?? 5000,
-            species: result.species.length,
-            reactions: result.reactions.length,
-            memoryUsed: 0,
-            timeElapsed: 0
-        });
-    } catch (e) {
-        const error = e as Error;
-        console.error('[NetworkExpansion] generator.generate() FAILED:', error.message);
-        throw e;
-    }
+    const result = await generator.generate(__seedSpecies, rules, throttledProgressCallback);
+    if (VERBOSE_NETEXP_DEBUG) console.log(`[NetExpDebug] Generated ${result.reactions.length} reactions from ${rules.length} rules.`);
+    // Final progress update
+    onProgress({
+        iteration: maxIterations,
+        species: result.species.length,
+        reactions: result.reactions.length,
+        memoryUsed: 0,
+        timeElapsed: 0,
+        // A truncated network carries its reason here: the worker forwards this
+        // payload to the UI warning channel. Omitted when complete, so the key's
+        // presence alone means "this network is not what the rules describe".
+        ...(result.warning ? { warning: result.warning } : {})
+    });
 
     checkCancelled();
 
@@ -761,6 +756,10 @@ export async function generateExpandedNetwork(
         ...inputModel,
         species: generatedSpecies,
         reactions: generatedReactions,
+        // A truncated network stays usable, but never silently: the UI, MCP and batch
+        // runners read these to avoid presenting it as a complete one.
+        networkComplete: result.complete,
+        networkWarning: result.warning,
     };
 
     // -------------------------------------------------------------------------

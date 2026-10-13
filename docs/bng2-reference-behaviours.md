@@ -350,6 +350,47 @@ and `RateLaw::equivalent` at `Perl2/RateLaw.pm:564-604`. Verified positions:
 | `RateLaw::equivalent` | `RateLaw.pm:564-604` ✓ | **deleted** by `a3e3b1ca` |
 | `Function::equivalent` inverted check | `Function.pm:165` | **deleted** by `a3e3b1ca` |
 
+## 2. Generation limits: BNG2 has no species/reaction cap, and its `max_iter` stop is invisible to callers
+
+Verified 2026-10-12 against the checkout (`~/Documents/BioNetGen/bionetgen/bionetgen/bng2`):
+
+- **`max_species` and `max_reactions` do not exist in BNG2 2.9.3.** `grep -rn
+  max_species bng2/` returns nothing. The playground's species/reaction caps are
+  our own safety valves, so "matching BNG2" is not an argument for any value of
+  them — including the defaults.
+- **`max_iter` defaults to 100** (`Perl2/BNGModel.pm:2517`) and the expansion loop
+  is `foreach my $niter ( 1 .. $params{max_iter} )` (`Perl2/BNGModel.pm:2649`): it
+  ends when the budget runs out, whether or not the rule set was exhausted, and
+  nothing downstream records which happened.
+
+So a caller of *either* implementation cannot infer completeness from "generation
+returned". Our contract is therefore explicit rather than silent: a breached limit
+stops expansion where it is hit (the network is a prefix, not a different network)
+and the result carries `complete: false` plus a `warning` naming the limit, the
+rule that hit it, and the ways out (`NetworkGenerator.generate()` →
+`NetworkGenerationResult`, `BNGLModel.networkComplete` / `networkWarning`). The
+warning also rides the final `GeneratorProgress`, which the worker forwards to the
+UI's existing warning channel, so a truncated network is visible in the app, in
+batch runs and in MCP `generate_network` output rather than only in the console.
+
+Corollary for anyone comparing against BNG2: if BNG2 stops at `max_iter` and we
+flag, that is BNG2's missing signal, not a species/reaction count difference.
+
+Measured on the RuleHub corpus (`/tmp/prof/RuleHub`, 937 models, 6-way parallel,
+30 s per-model budget), same machine and settings before/after:
+
+| | before | after |
+|---|---|---|
+| networks returned | 839 | 854 |
+| truncated networks reported as complete | **11 (silent `console.warn` only)** | **0** |
+| networks flagged `complete: false` | 0 (not measurable) | 21 |
+| species/reaction counts changed | — | **0 of 838** comparable models |
+| total generation time | 705 s | 712 s (+1.1%, run-to-run noise) |
+
+The 21 flagged models break down as 14 max-species, 3 max-reactions and 4
+max-iterations. The extra 10 over the 11 cap-saturated ones are exactly the
+`max_iter` truncations that used to be console-only.
+
 ## Corpus drift
 
 The original audit ran 748 models. The RuleHub corpus on disk today contains

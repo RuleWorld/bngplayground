@@ -279,6 +279,11 @@ The following are gitignored and should be considered temporary/debug:
 - Fallback uses Weisfeiler-Lehman refinement + BFS-based canonical ordering when Nauty is unavailable
 - **Validation**: Species counts are verified against BNG2.pl in `tests/bng2-comparison.spec.ts`
 - Targeted regression: `tests/nauty-canonicalization.spec.ts`
+- Canonical forms of multi-molecule species are memoized in `GraphCanonicalizer`
+  under an exact structural key (not a hash), so a repeated structure skips WL
+  refinement. Single-molecule species are not memoized: they are already one
+  string build. `clearCanonicalCache()` drops the memo alongside the other
+  per-generation caches.
 
 ### ODE Solver
 - **CVODE WASM (SUNDIALS)** is the primary solver for stiff systems - NOT RK4

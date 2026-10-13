@@ -239,6 +239,11 @@ export async function runSingleBatchItem(
             if (expanded.reactions) model.reactions = expanded.reactions;
             if (expanded.species) model.species = expanded.species;
             if ((expanded as any).concreteObservables) (model as any).concreteObservables = (expanded as any).concreteObservables;
+            if (expanded.networkWarning) {
+                // A capped expansion still simulates, but on a truncated network:
+                // say so in the batch log instead of reporting a clean pass.
+                reporter.warn(`⚠️ ${modelDef.name}: ${expanded.networkWarning}`);
+            }
 
             if (verbose) reporter.timeEnd('NetGen');
         }

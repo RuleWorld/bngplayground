@@ -35,16 +35,14 @@ describe('NetworkExpansion Error Handling', () => {
             networkOptions: { maxIter: 2 } // Very low limit
         };
 
-        // Expect it to throw or return partial. 
-        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+        // Expansion still stops gracefully at max_iter and resolves with what it
+        // built. The truncation is reported through the result, not console
+        // output: console text is incidental and was never a contract callers
+        // could read.
+        const result = await Engine.generateExpandedNetwork(polyModel, () => { }, () => { });
 
-        // Expect it to resolve (stop gracefully) but log a warning
-        await expect(Engine.generateExpandedNetwork(polyModel, () => { }, () => { }))
-            .resolves.toBeDefined();
-
-        expect(consoleSpy).toHaveBeenCalledWith(
-            expect.stringMatching(/maxIterations limit.*reached/i)
-        );
+        expect(result.networkComplete).toBe(false);
+        expect(result.networkWarning).toMatch(/iterations limit/i);
     });
 
     it('should handle functional rate evaluation errors gracefully by skipping the invalid rule', async () => {

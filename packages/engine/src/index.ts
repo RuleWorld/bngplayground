@@ -28,6 +28,7 @@ export { countEmbeddingDegeneracy } from './services/graph/core/degeneracy';
 
 // High-level graph algorithms
 export { NetworkGenerator, NetworkGenerationLimitError } from './services/graph/NetworkGenerator';
+export type { NetworkGenerationResult } from './services/graph/NetworkGenerator';
 export { NetworkExporter } from './services/graph/NetworkExporter';
 export { parseNetFile, loadNetFile } from './services/graph/NetParser';
 export type { NetFileParseResult } from './services/graph/NetParser';

@@ -631,12 +631,165 @@ export class SpeciesGraph {
       componentMols.forEach((oldIdx, newIdx) => oldToNew.set(oldIdx, newIdx));
 
       const newMolecules = componentMols.map(idx => this.molecules[idx].clone());
+      const newGraph = new SpeciesGraph(newMolecules);
+
+      // A direct clone is safe only when adjacency and Component.edges describe
+      // exactly the same reciprocal, internal bonds. The general path below
+      // intentionally remains the fallback for malformed or dangling graphs.
+      const componentMolSet = new Set(componentMols);
+      const endpointCache = new Map<string, { molIdx: number; compIdx: number } | null>();
+      const parseEndpoint = (endpoint: string): { molIdx: number; compIdx: number } | undefined => {
+        if (endpointCache.has(endpoint)) return endpointCache.get(endpoint) ?? undefined;
+        const dotIdx = endpoint.indexOf('.');
+        let parsed: { molIdx: number; compIdx: number } | undefined;
+        if (dotIdx > 0 && dotIdx < endpoint.length - 1 && endpoint.indexOf('.', dotIdx + 1) === -1) {
+          const molText = endpoint.slice(0, dotIdx);
+          const compText = endpoint.slice(dotIdx + 1);
+          const molIdx = Number(molText);
+          const compIdx = Number(compText);
+          if (
+            Number.isSafeInteger(molIdx) &&
+            Number.isSafeInteger(compIdx) &&
+            molIdx >= 0 &&
+            molIdx < this.molecules.length &&
+            compIdx >= 0 &&
+            compIdx < this.molecules[molIdx].components.length &&
+            String(molIdx) === molText &&
+            String(compIdx) === compText
+          ) {
+            parsed = { molIdx, compIdx };
+          }
+        }
+        endpointCache.set(endpoint, parsed ?? null);
+        return parsed;
+      };
+
+      let canCopyStructure = true;
+      const remappedAdjacency: Array<[string, string[]]> = [];
+      for (const [key, partners] of this.adjacency.entries()) {
+        const parsedKey = parseEndpoint(key);
+        let partnerTouchesComponent = false;
+        if (Array.isArray(partners)) {
+          for (const partner of partners) {
+            const parsedPartner = parseEndpoint(partner);
+            if (parsedPartner && componentMolSet.has(parsedPartner.molIdx)) {
+              partnerTouchesComponent = true;
+              break;
+            }
+          }
+        }
+
+        if (!parsedKey) {
+          if (partnerTouchesComponent) canCopyStructure = false;
+          continue;
+        }
+        const keyTouchesComponent = componentMolSet.has(parsedKey.molIdx);
+        if (!keyTouchesComponent) {
+          if (partnerTouchesComponent) canCopyStructure = false;
+          continue;
+        }
+        if (!Array.isArray(partners) || partners.length === 0) {
+          canCopyStructure = false;
+          continue;
+        }
+
+        const remappedPartners: string[] = [];
+        const seenPartners = new Set<string>();
+        for (const partner of partners) {
+          const parsedPartner = parseEndpoint(partner);
+          if (
+            !parsedPartner ||
+            !componentMolSet.has(parsedPartner.molIdx) ||
+            (parsedPartner.molIdx === parsedKey.molIdx && parsedPartner.compIdx === parsedKey.compIdx) ||
+            seenPartners.has(partner)
+          ) {
+            canCopyStructure = false;
+            continue;
+          }
+          seenPartners.add(partner);
+
+          const reversePartners = this.adjacency.get(partner);
+          let reverseCount = 0;
+          if (reversePartners) {
+            for (const reversePartner of reversePartners) {
+              if (reversePartner === key) reverseCount++;
+            }
+          }
+          if (reverseCount !== 1) {
+            canCopyStructure = false;
+            continue;
+          }
+
+          const newMolIdx = oldToNew.get(parsedPartner.molIdx);
+          if (newMolIdx === undefined) {
+            canCopyStructure = false;
+            continue;
+          }
+          remappedPartners.push(`${newMolIdx}.${parsedPartner.compIdx}`);
+        }
+        remappedAdjacency.push([
+          `${oldToNew.get(parsedKey.molIdx)!}.${parsedKey.compIdx}`,
+          remappedPartners,
+        ]);
+      }
+
+      if (canCopyStructure) {
+        for (const oldMolIdx of componentMols) {
+          const mol = this.molecules[oldMolIdx];
+          for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
+            const comp = mol.components[compIdx];
+            const key = `${oldMolIdx}.${compIdx}`;
+            const partners = this.adjacency.get(key);
+            if (!partners) {
+              if (comp.edges.size !== 0) canCopyStructure = false;
+              continue;
+            }
+
+            for (const partner of partners) {
+              const parsedPartner = parseEndpoint(partner);
+              if (!parsedPartner) {
+                canCopyStructure = false;
+                continue;
+              }
+              const partnerComp = this.molecules[parsedPartner.molIdx].components[parsedPartner.compIdx];
+              let matchingLabels = 0;
+              for (const [label, targetCompIdx] of comp.edges.entries()) {
+                if (targetCompIdx === parsedPartner.compIdx && partnerComp.edges.get(label) === compIdx) {
+                  matchingLabels++;
+                }
+              }
+              if (matchingLabels !== 1) canCopyStructure = false;
+            }
+
+            for (const [label, targetCompIdx] of comp.edges.entries()) {
+              let matchingPartners = 0;
+              for (const partner of partners) {
+                const parsedPartner = parseEndpoint(partner);
+                if (!parsedPartner || parsedPartner.compIdx !== targetCompIdx) continue;
+                const partnerComp = this.molecules[parsedPartner.molIdx].components[parsedPartner.compIdx];
+                if (partnerComp.edges.get(label) === compIdx) matchingPartners++;
+              }
+              if (matchingPartners !== 1) canCopyStructure = false;
+            }
+          }
+        }
+      }
+
+      if (canCopyStructure) {
+        for (const [key, partners] of remappedAdjacency) {
+          newGraph.adjacency.set(key, [...partners]);
+        }
+        // Propagate compartment
+        newGraph.compartment = this.compartment;
+        graphs.push(newGraph);
+        continue;
+      }
+
       for (const molecule of newMolecules) {
         for (const component of molecule.components) {
           component.edges.clear();
         }
       }
-      const newGraph = new SpeciesGraph(newMolecules);
 
       // Reconstruct bonds (support multi-site bonding)
       const addedBonds = new Set<string>(); // Track added bonds to avoid duplicates
