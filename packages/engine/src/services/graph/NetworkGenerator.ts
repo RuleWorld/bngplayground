@@ -6146,10 +6146,10 @@ export class NetworkGenerator {
       canonical = profiledCanonicalize(graph);
     }
 
-    if (speciesMap.has(canonical)) {
+    const existing = speciesMap.get(canonical);
+    if (existing !== undefined) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      const existing = speciesMap.get(canonical);
-      if (existing) return existing;
+      return existing;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {
@@ -6183,7 +6183,10 @@ export class NetworkGenerator {
    * Add a species' molecules to the inverted index for quick lookup when matching
    */
   private indexSpecies(species: Species): void {
+    const indexedNames = new Set<string>();
     for (const m of species.graph.molecules) {
+      if (indexedNames.has(m.name)) continue;
+      indexedNames.add(m.name);
       const set = this.speciesByMoleculeIndex.get(m.name) ?? new Set<number>();
       set.add(species.index);
       this.speciesByMoleculeIndex.set(m.name, set);
