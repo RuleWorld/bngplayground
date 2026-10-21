@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { BNGLModel, SimulationResults } from '../../types';
 import { Card } from '../ui/Card';
@@ -95,9 +95,13 @@ function computeFluxes(
 }
 
 export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results, modelSource }) => {
-  const [selectedTimeIndex, setSelectedTimeIndex] = useState(0);
+  const [selectedTimeIndex, setSelectedTimeIndex] = useState(() => Math.max(0, (results?.data.length ?? 1) - 1));
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
   const [topN, setTopN] = useState(10);
+
+  useEffect(() => {
+    setSelectedTimeIndex(Math.max(0, (results?.data.length ?? 1) - 1));
+  }, [results]);
 
   const timePoints = useMemo(() => {
     if (!results?.data) return [];
@@ -230,7 +234,7 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
           {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
         </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Analyze which reactions contribute most to species dynamics. Flux = rate constant × reactant concentrations.
+          Analyze which reactions contribute most to species dynamics at the selected time point. The initial view uses the last simulated time point; equal flux values are ties. Flux = rate constant × reactant concentrations.
         </p>
 
         <div className="flex flex-wrap gap-4 items-end">
@@ -293,7 +297,7 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
       {chartData.length > 0 && (
         <Card className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-            Top Reaction Fluxes
+            Top Reaction Fluxes at t = {typeof results.data[selectedTimeIndex]?.time === 'number' ? results.data[selectedTimeIndex].time.toPrecision(4) : results.data[selectedTimeIndex]?.time}
           </h3>
 
           {selectedSpecies && (

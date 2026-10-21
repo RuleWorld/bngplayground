@@ -80,3 +80,8 @@ export class SeededRandom {
     return weights.length - 1;
   }
 }
+
+/** Return a fresh positive seed in NFsim's supported 1..999999 range. */
+export function createRandomSimulationSeed(): number {
+  return Math.floor(Math.random() * 999_999) + 1;
+}

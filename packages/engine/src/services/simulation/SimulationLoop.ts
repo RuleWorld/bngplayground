@@ -28,6 +28,7 @@ import { DenseOutputBuffer } from './DenseOutput';
 import { generateExpandedNetwork } from './NetworkExpansion';
 import { SBMLEventRuntime, type SBMLEventAssignmentTarget } from './SBMLEventRuntime';
 import { isSafeObjectKey, setSafeNumberField } from '../../utils/safeObjectKey';
+import { createRandomSimulationSeed } from '../../utils/random';
 // import * as fs from 'node:fs';
 
 interface ConcreteReaction {
@@ -211,6 +212,54 @@ export function resolveSimulationPhasesForRun(model: BNGLModel, options: Simulat
   }
 
   return phases;
+}
+
+const STOCHASTIC_METHODS = new Set(['ssa', 'nf', 'nfsim', 'pla', 'psa']);
+
+/**
+ * Resolve a stochastic seed once for each simulation run. Explicit UI options
+ * take precedence, followed by seed values authored in the matching BNGL phase
+ * or model options. Unseeded stochastic runs receive a new seed; ODE runs do not.
+ */
+export function resolveStochasticSeedForRun(
+  options: SimulationOptions,
+  model: BNGLModel,
+): SimulationOptions {
+  if (options.seed !== undefined && options.seed !== null) return options;
+
+  // Authored workflows own their seed at the phase boundary. Resolving one
+  // global seed here would make a later phase's seed leak into earlier phases.
+  if ((model.simulationPhases?.length ?? 0) > 0) return options;
+
+  const method = options.method;
+  if (!STOCHASTIC_METHODS.has(method)) return options;
+
+  const normalizedMethod = method === 'nfsim' ? 'nf' : method;
+  const modelSeed = model.simulationOptions?.seed;
+  const action = model.actions?.find((candidate) => {
+    const candidateMethod = String(candidate.args?.method ?? '').replace(/[\"']/g, '').toLowerCase();
+    return (
+      candidate.type === `simulate_${normalizedMethod}` ||
+      (candidate.type === 'simulate' && (candidateMethod === normalizedMethod || (normalizedMethod === 'nf' && candidateMethod === 'nfsim')))
+    ) && candidate.args?.seed !== undefined;
+  });
+  const actionSeed = action?.args?.seed === undefined ? undefined : Number(action.args.seed);
+  const authoredSeed = (Number.isFinite(actionSeed) ? actionSeed : undefined) ?? modelSeed;
+
+  return {
+    ...options,
+    seed: authoredSeed ?? createRandomSimulationSeed(),
+  };
+}
+
+/** Resolve a seed at the execution boundary for one stochastic phase. */
+export function resolveStochasticSeedForPhase(
+  options: SimulationOptions,
+  model: BNGLModel,
+  phase?: SimulationPhase,
+): number {
+  return options.seed ?? phase?.seed ?? model.simulationOptions?.seed ??
+    createRandomSimulationSeed();
 }
 
 function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
@@ -462,6 +511,7 @@ export async function simulate(
     postMessage: (msg: { type: string; payload?: unknown; time?: number; state?: Float64Array; speciesCount?: number; observablesCount?: number; progress?: number;[key: string]: unknown }) => void
   }
 ): Promise<SimulationResults> {
+  options = resolveStochasticSeedForRun(options, inputModel);
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
   const simulationStartTime = VERBOSE_SIM_DEBUG ? performance.now() : 0;
   const strictFunctionalRates = !!options.strictFunctionalRates;
@@ -2298,8 +2348,10 @@ export async function simulate(
         ...model,
         species: model.species.map((s, i) => ({ ...s, initialConcentration: state[i] }))
       };
+      const psaPhase = phases.find((phase) => phase.method === 'psa') ?? phases[0];
       const psaOptions = {
         ...options,
+        seed: resolveStochasticSeedForPhase(options, model, psaPhase),
         poplevel: ((options as typeof options & { poplevel?: number }).poplevel) ?? phases[0]?.poplevel ?? 100,
       };
       const result = await simulatePSA(psaModel, psaOptions);
@@ -2314,7 +2366,11 @@ export async function simulate(
         ...model,
         species: model.species.map((s, i) => ({ ...s, initialConcentration: state[i] }))
       };
-      const result = await simulatePLA(plaModel, options);
+      const plaPhase = phases.find((phase) => phase.method === 'pla') ?? phases[0];
+      const result = await simulatePLA(plaModel, {
+        ...options,
+        seed: resolveStochasticSeedForPhase(options, model, plaPhase),
+      });
       if (includeSpeciesData) {
         // PLA simulator doesn't return full species matrices by default, 
         // but that's fine for BNGL action parity since observables are what's plotted.
@@ -2477,7 +2533,8 @@ export async function simulate(
 
       // === OPT 3: INLINED PRNG (Mulberry32) ===
       // V8 inlines this compact helper in the SSA event loop.
-      let rngState = (options.seed ?? 12345) | 0;
+      const ssaPhase = phases.find((phase) => phase.method === 'ssa') ?? phases[0];
+      let rngState = resolveStochasticSeedForPhase(options, model, ssaPhase) | 0;
       const nextRand = (): number => {
         let t = (rngState += 0x6d2b79f5);
         t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -4961,7 +5018,7 @@ export async function simulate(
           const nfsimResults = await runNFsimSimulation(model, {
             t_end: phaseDuration,
             n_steps: phase_n_steps,
-            seed: options.seed,
+            seed: resolveStochasticSeedForPhase(options, model, phase),
             utl: phase.utl,
             gml: phase.gml,
             equilibrate: phase.equilibrate,

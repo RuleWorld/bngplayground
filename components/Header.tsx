@@ -4,61 +4,36 @@ import { MoonIcon } from './icons/MoonIcon';
 import { SunIcon } from './icons/SunIcon';
 import { EmailIcon } from './icons/EmailIcon';
 import { ShareButton } from './ShareButton';
-import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
-import { EyeIcon } from './icons/EyeIcon';
 import { InfoIcon } from './icons/InfoIcon';
-import { VSCodeAnalysisContext, VSCodeExportModal } from './VSCodeExportModal';
-import { DownloadIcon } from './icons/DownloadIcon';
-import { UploadIcon } from './icons/UploadIcon';
-import { BioModelsImportModal } from './BioModelsImportModal';
 
 interface HeaderProps {
   onAboutClick: (focus?: string) => void;
-  onExportSBML?: () => void;
-  onExportSedML?: () => void;
-  onExportOMEX?: () => void;
-  onExportNET?: () => void;
-  onExportODE?: () => void;
-  onExportBNGL?: () => void;
-  onImportSBML?: (file: File) => void | Promise<void>;
   code?: string;
   modelName?: string | null;
   modelId?: string | null;
   onModelNameChange?: (name: string | null) => void;
-  vscodeAnalysis?: VSCodeAnalysisContext | null;
   viewMode: 'code' | 'design';
   onViewModeChange: (mode: 'code' | 'design') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onAboutClick,
-  onExportSBML,
-  onExportSedML,
-  onExportOMEX,
-  onExportNET,
-  onExportODE,
-  onExportBNGL,
-  onImportSBML,
   code,
   modelName,
   modelId,
   onModelNameChange,
-  vscodeAnalysis,
   viewMode,
   onViewModeChange,
 }) => {
   const [theme, toggleTheme] = useTheme();
-  const [isVSCodeModalOpen, setIsVSCodeModalOpen] = React.useState(false);
-  const [isBioModelsOpen, setIsBioModelsOpen] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   return (
     <>
       <header role="banner" className="bg-white dark:bg-slate-800 border-b border-stone-200 dark:border-slate-700 shadow-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-3.5">
+          <div className="flex flex-col gap-3 py-3.5 lg:flex-row lg:items-center lg:justify-between">
             {/* Logo + Title */}
             <div className="flex items-center gap-3">
               <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-white dark:bg-slate-900 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600">
@@ -103,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Actions */}
-            <div aria-label="Main navigation" className="flex items-center gap-2">
+            <div aria-label="Main navigation" className="flex w-full flex-wrap items-center justify-end gap-1 sm:gap-2 lg:w-auto">
               {code && (
                 <div className="flex items-center gap-1 mr-1">
                   <ShareButton
@@ -115,112 +90,44 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
 
-              {/* Help Dropdown */}
-              <Dropdown
-                trigger={
-                  <button className="p-2 text-slate-500 dark:text-slate-300 hover:text-slate-700
-                                     dark:hover:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 rounded transition-colors"
-                    title="Help & Resources"
-                    aria-label="Help & Resources">
-                    <QuestionMarkCircleIcon className="w-5 h-5" />
-                  </button>
-                }
+              <button
+                type="button"
+                onClick={() => onAboutClick('bngl')}
+                className="rounded p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                title="BNGL Syntax Guide"
+                aria-label="BNGL Syntax Guide"
               >
-                <DropdownItem onClick={() => onAboutClick('bngl')}>
-                  <div className="flex items-center gap-2">
-                    <BookOpenIcon className="w-4 h-4 text-slate-400" />
-                    <span>BNGL Syntax Guide</span>
-                  </div>
-                </DropdownItem>
-                <DropdownItem onClick={() => onAboutClick('viz')}>
-                  <div className="flex items-center gap-2">
-                    <EyeIcon className="w-4 h-4 text-slate-400" />
-                    <span>Visualization Key</span>
-                  </div>
-                </DropdownItem>
-                <DropdownItem onClick={() => onAboutClick()}>
-                  <div className="flex items-center gap-2">
-                    <InfoIcon className="w-4 h-4 text-slate-400" />
-                    <span>About BNG Playground</span>
-                  </div>
-                </DropdownItem>
-                <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                <DropdownItem onClick={() => fileInputRef.current?.click()}>
-                  <div className="flex items-center gap-2">
-                    <UploadIcon className="w-4 h-4 text-slate-400" />
-                    <span>Import SBML (Local file)</span>
-                  </div>
-                </DropdownItem>
-                <DropdownItem onClick={() => setIsBioModelsOpen(true)}>
-                  <div className="flex items-center gap-2">
-                    <UploadIcon className="w-4 h-4 text-slate-400" />
-                    <span>Import from BioModels...</span>
-                  </div>
-                </DropdownItem>
-                {onExportSBML && (
-                  <DropdownItem onClick={onExportSBML}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export SBML</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {onExportSedML && (
-                  <DropdownItem onClick={onExportSedML}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export SED-ML</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {onExportOMEX && (
-                  <DropdownItem onClick={onExportOMEX}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export OMEX (Archive)</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {onExportBNGL && (
-                  <DropdownItem onClick={onExportBNGL}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export BNGL</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {code && (
-                  <DropdownItem onClick={() => setIsVSCodeModalOpen(true)}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Open In VS Code</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {onExportNET && (
-                  <DropdownItem onClick={onExportNET}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export NET</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                {onExportODE && (
-                  <DropdownItem onClick={onExportODE}>
-                    <div className="flex items-center gap-2">
-                      <DownloadIcon className="w-4 h-4 text-slate-400" />
-                      <span>Export ODE</span>
-                    </div>
-                  </DropdownItem>
-                )}
-                <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-                <DropdownItem onClick={() => window.open('mailto:bionetgen.main@gmail.com?subject=BNG%20Playground%20Question')}>
-                  <div className="flex items-center gap-2">
-                    <EmailIcon className="w-4 h-4 text-slate-400" />
-                    <span>Contact Us</span>
-                  </div>
-                </DropdownItem>
-              </Dropdown>
+                <BookOpenIcon className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onAboutClick()}
+                className="rounded p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                title="About BNG Playground"
+                aria-label="About BNG Playground"
+              >
+                <InfoIcon className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => window.open('mailto:bionetgen.main@gmail.com?subject=BNG%20Playground%20Question')}
+                className="rounded p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                title="Contact Us"
+                aria-label="Contact Us"
+              >
+                <EmailIcon className="h-5 w-5" />
+              </button>
+
+              <a
+                href="https://bionetgen.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                title="Help & Resources — BioNetGen website"
+                aria-label="Help & Resources"
+              >
+                <QuestionMarkCircleIcon className="h-5 w-5" />
+              </a>
 
               {/* Theme Toggle */}
               <button
@@ -234,36 +141,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        <VSCodeExportModal
-          isOpen={isVSCodeModalOpen}
-          onClose={() => setIsVSCodeModalOpen(false)}
-          code={code || ''}
-          modelName={modelName}
-          analysis={vscodeAnalysis}
-        />
-        <input
-          type="file"
-          ref={fileInputRef}
-          style={{ display: 'none' }}
-          aria-hidden="true"
-          accept=".sbml,.xml"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file && onImportSBML) {
-              onImportSBML(file);
-              // Reset input so the same file can be selected again
-              e.target.value = '';
-            }
-          }}
-        />
-        <BioModelsImportModal
-          isOpen={isBioModelsOpen}
-          onClose={() => setIsBioModelsOpen(false)}
-          onImportSBML={(file) => {
-            if (onImportSBML) onImportSBML(file);
-            else console.warn('BioModels import requested but no onImportSBML handler present');
-          }}
-        />
       </header>
     </>
   );

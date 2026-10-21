@@ -192,9 +192,9 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model,
   if (!model) return null;
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 h-full overflow-hidden">
+    <div className="flex flex-col 2xl:flex-row gap-6 h-full overflow-y-auto 2xl:overflow-hidden">
       {/* Sidebar: Configuration */}
-      <div className="w-full xl:w-80 flex flex-col gap-6 overflow-y-auto pr-2">
+      <div className="w-full 2xl:w-80 2xl:shrink-0 flex flex-col gap-6 2xl:overflow-y-auto pr-2">
         <Card className="p-5 border-t-4 border-t-amber-500 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-widest">Sobol Config</h3>
@@ -293,7 +293,25 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model,
         <Card className="p-5 flex flex-col min-h-[400px] overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-slate-800 dark:text-slate-100 text-xs uppercase tracking-widest">Parameters</h3>
-            <span className="text-[10px] bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 px-2 py-0.5 rounded font-bold">{activeParams.length} Selected</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded font-bold">{activeParams.length} Selected</span>
+              <button
+                type="button"
+                onClick={() => setParamBounds((current) => Object.fromEntries(Object.entries(current).map(([name, bounds]) => [name, { ...bounds, active: true }]))) }
+                disabled={isAnalyzing || activeParams.length === Object.keys(paramBounds).length}
+                className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 disabled:opacity-40"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => setParamBounds((current) => Object.fromEntries(Object.entries(current).map(([name, bounds]) => [name, { ...bounds, active: false }]))) }
+                disabled={isAnalyzing || activeParams.length === 0}
+                className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 disabled:opacity-40"
+              >
+                Clear
+              </button>
+            </div>
           </div>
           <div className="overflow-y-auto flex-1 -mr-2 pr-2 space-y-1">
             {Object.entries(model.parameters).map(([name, value]) => {
@@ -350,7 +368,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model,
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col gap-6 overflow-y-auto">
+      <div className="min-w-0 w-full 2xl:flex-1 flex flex-col gap-6 2xl:overflow-y-auto">
         {results ? (
           <div className="space-y-6 pb-6">
             <Card className="p-6 shadow-xl border-t-4 border-t-amber-500 overflow-hidden relative">
@@ -369,7 +387,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model,
                 {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
               </div>
 
-              <div className="h-[450px] w-full bg-slate-50 dark:bg-slate-900/50/50 dark:bg-slate-900/30 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
+              <div className="h-[450px] min-h-[350px] min-w-0 w-full bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/30 rounded-2xl p-4 sm:p-6 border border-slate-100 dark:border-slate-800">
                 <ResponsiveContainer width="100%" height="100%">
                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barGap={0}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />

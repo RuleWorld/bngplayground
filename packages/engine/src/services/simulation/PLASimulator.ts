@@ -21,7 +21,7 @@ import { countPatternMatches } from '../parity/PatternMatcher';
  * classification enum values match the C++ RxnClassifier constants.
  */
 
-import { SeededRandom } from '../../utils/random';
+import { SeededRandom, createRandomSimulationSeed } from '../../utils/random';
 import type { SimulationOptions, SimulationResults, BNGLModel } from '../../types';
 import { splitObservablePatterns } from '../../utils/observableUtils';
 import { setSafeNumberField } from '../../utils/safeObjectKey';
@@ -740,6 +740,7 @@ export async function simulatePLA(
   model: BNGLModel,
   options: PLAOptions
 ): Promise<SimulationResults> {
-  const simulator = new PLASimulator(options.seed, options);
-  return simulator.simulate(model, options);
+  const runOptions = { ...options, seed: options.seed ?? createRandomSimulationSeed() };
+  const simulator = new PLASimulator(runOptions.seed, runOptions);
+  return simulator.simulate(model, runOptions);
 }

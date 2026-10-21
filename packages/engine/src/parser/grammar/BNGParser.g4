@@ -472,7 +472,7 @@ arg_name
     // generate_network options
     | OVERWRITE | MAX_AGG | MAX_ITER | MAX_STOICH | PRINT_ITER | CHECK_ISO
     // simulate options
-    | METHOD | T_START | T_END | N_STEPS | N_OUTPUT_STEPS | ATOL | RTOL | STEADY_STATE | SPARSE
+    | METHOD | T_START | T_END | N_STEPS | N_OUTPUT_STEPS | ATOL | RTOL | STEADY_STATE | SPARSE | SEED
     | VERBOSE | NETFILE | CONTINUE | PREFIX | SUFFIX | FORMAT | FILE
     | PRINT_FUNCTIONS   // `simulate({...,print_functions=>1})`
     // Additional simulate options

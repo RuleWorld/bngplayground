@@ -157,6 +157,10 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
   const observableNames = useMemo(() => (model ? model.observables.map((obs) => obs.name) : []), [model]);
 
+  useEffect(() => {
+    setSelectedObservable((current) => observableNames.includes(current) ? current : observableNames[0] ?? '');
+  }, [observableNames]);
+
   const speciesMap = useMemo(() => {
     const map = new Map<string, NonNullable<BNGLModel['species']>[number]>();
     if (model) {
@@ -635,6 +639,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
 
   const canRunScan = () => {
+    if (!selectedObservable || !observableNames.includes(selectedObservable)) return false;
     if (!parameter1 || !effectiveParam1Start || !effectiveParam1End || !param1Steps) return false;
     if (isLogScale && (Number(effectiveParam1Start) <= 0 || Number(effectiveParam1End) <= 0)) return false;
     if (scanType === '2d' && (!parameter2 || parameter2 === parameter1 || !effectiveParam2Start || !effectiveParam2End || !param2Steps)) {
@@ -975,7 +980,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
             </label>
             <label
               className="flex items-center gap-2 ml-2 text-sm text-slate-600 dark:text-slate-300"
-              title="Also list direct initial-amount scans for species whose initial amount comes from a parameter"
+              title="Show species initial amounts as scan choices. Choosing one sets that species amount directly and overrides its defining expression."
             >
               <input
                 type="checkbox"
@@ -983,7 +988,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
                 onChange={(evt) => setShowAllSpeciesScans(evt.target.checked)}
                 className="rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary"
               />
-              Direct amounts for all species
+              Show species initial amounts
             </label>
             {isLogScale && (Number(effectiveParam1Start) <= 0 || Number(effectiveParam1End) <= 0) && (
               <div className="text-xs text-red-600 dark:text-red-400 ml-3">Log scale requires positive start/end values for parameter 1.</div>
@@ -1004,7 +1009,10 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
             return (
               <div className="space-y-3" key={axis}>
                 <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Parameter {axis}</h4>
-                <Select id={`ps-param${axis}`} value={selected} onChange={(event) => onSelect(event.target.value)}>
+                <label htmlFor={`ps-param${axis}`} className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {axis === 1 ? 'Parameter or species amount' : 'Second parameter or species amount'}
+                </label>
+                <Select id={`ps-param${axis}`} value={selected} onChange={(event) => onSelect(event.target.value)} className="w-full min-w-0">
                   {parameterNames.map((name) => {
                     const nameDrivers = speciesToParameters[name];
                     const initializesSpecies = paramToSpecies[name];
@@ -1035,9 +1043,18 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
                   </div>
                 ) : null}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Input type="number" value={start} onChange={(event) => onStart(event.target.value)} placeholder={defaultStart || "Start"} />
-                  <Input type="number" value={end} onChange={(event) => onEnd(event.target.value)} placeholder={defaultEnd || "End"} />
-                  <Input type="number" value={steps} min={1} onChange={(event) => onSteps(event.target.value)} placeholder="Steps" />
+                  <div className="space-y-1">
+                    <label htmlFor={`ps-start${axis}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400">Start value</label>
+                    <Input id={`ps-start${axis}`} type="number" value={start} onChange={(event) => onStart(event.target.value)} placeholder={defaultStart || 'Enter start'} />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor={`ps-end${axis}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400">End value</label>
+                    <Input id={`ps-end${axis}`} type="number" value={end} onChange={(event) => onEnd(event.target.value)} placeholder={defaultEnd || 'Enter end'} />
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor={`ps-scan-steps${axis}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400">Scan points</label>
+                    <Input id={`ps-scan-steps${axis}`} type="number" value={steps} min={1} onChange={(event) => onSteps(event.target.value)} placeholder="e.g. 20" />
+                  </div>
                 </div>
               </div>
             );
@@ -1093,6 +1110,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
               onChange={(event) => setSelectedObservable(event.target.value)}
               className="w-48"
             >
+              <option value="">Choose an observable</option>
               {observableNames.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -1118,6 +1136,17 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
             </Button>
           </div>
         </div>
+        {!isRunning && !canRunScan() && (
+          <p role="status" className="text-xs text-slate-500 dark:text-slate-400">
+            {observableNames.length === 0
+              ? 'This model has no observables to plot. Add at least one observable before running a scan.'
+              : !selectedObservable
+                ? 'Select an observable to plot before running the scan.'
+                : scanType === '2d' && parameter1 && parameter2 === parameter1
+                  ? 'Choose a different second parameter for a 2D scan.'
+                  : `Choose a ${scanType === '2d' ? 'different parameter or species amount for each axis, enter start and end values, and set scan points' : 'parameter or species amount, enter start and end values, and set scan points'} to enable Run Scan.`}
+          </p>
+        )}
       </Card>
 
       {/* Neural ODE Surrogate Card */}

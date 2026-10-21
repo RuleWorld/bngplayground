@@ -20,9 +20,10 @@ describe('AboutModal', () => {
         expect(screen.getByText('What is BNGL?')).toBeInTheDocument();
     });
 
-    it('renders "Visualization Conventions" title when focus is "viz"', () => {
-        render(<AboutModal isOpen={true} onClose={() => {}} focus="viz" />);
-        expect(screen.getByText('Visualization Conventions')).toBeInTheDocument();
+    it('describes the current Playground at a high level', () => {
+        render(<AboutModal isOpen={true} onClose={() => {}} />);
+        expect(screen.getByText(/interactive workspace for learning and exploring rule-based models/i)).toBeInTheDocument();
+        expect(screen.getByText(/interactive examples, model editing, deterministic and stochastic simulation/i)).toBeInTheDocument();
     });
 
     it('calls onClose when the close button is clicked', () => {

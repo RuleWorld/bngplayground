@@ -428,8 +428,8 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
           >
             Y: {yAxisScale.toUpperCase()}
           </button>
-          <div className="ml-auto text-[10px] text-slate-400 font-medium italic hidden sm:block">
-            Drag to zoom • Double-click to reset
+          <div className="ml-auto text-[10px] text-slate-400 font-medium italic">
+            Click and drag across the plot to zoom • Double-click to reset
           </div>
           {zoomHistory.length > 0 && (
             <button

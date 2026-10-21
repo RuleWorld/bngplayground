@@ -107,7 +107,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     onActiveTabIndexChange?.(idx);
   };
 
-  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence' | 'analysis'>('regulatory');
+  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence' | 'analysis'>('contact');
   const auxiliaryRequestRef = React.useRef(new Set<string>());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = useState(false);
   const [auxiliaryError, setAuxiliaryError] = useState<string | null>(null);
@@ -295,17 +295,6 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         {activeTab === 1 && (
           <div role="group" aria-label="Network View Mode" className="flex bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-0.5 ml-auto my-1 max-w-full min-w-0 overflow-x-auto whitespace-nowrap">
             <button
-              onClick={() => setNetworkViewMode('regulatory')}
-              aria-pressed={networkViewMode === 'regulatory'}
-              aria-label="Switch to Regulatory view"
-              className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'regulatory'
-                  ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
-                }`}
-            >
-              Regulatory
-            </button>
-            <button
               onClick={() => setNetworkViewMode('contact')}
               aria-pressed={networkViewMode === 'contact'}
               aria-label="Switch to Contact Map view"
@@ -315,6 +304,18 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 }`}
             >
               Contact Map
+            </button>
+
+            <button
+              onClick={() => setNetworkViewMode('regulatory')}
+              aria-pressed={networkViewMode === 'regulatory'}
+              aria-label="Switch to Regulatory view"
+              className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'regulatory'
+                  ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
+                }`}
+            >
+              Regulatory
             </button>
 
             <button
@@ -443,7 +444,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 "Highlights internal state changes",
                 "Simplifies complex multi-state systems"
               ]}
-              plotDescription="Shapes represent molecules, and internal port-dots represent sites. Lines between sites indicate that those two molecules can physically bind to each other."
+              plotDescription="Molecule shapes contain their sites; state markers describe site states. Solid lines show possible binding between sites, while red dotted lines indicate bond-breaking reactions."
             />
             <ErrorBoundary label="tab:contact-map">
               <ContactMapTab model={model} results={results} onSelectRule={setSelectedRuleId} />

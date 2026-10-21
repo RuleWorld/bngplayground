@@ -100,7 +100,7 @@
     "antlr4ts-cli": "^0.5.0-alpha.4",
     "assert": "^2.1.0",
     "autoprefixer": "^10.5.5",
-    "baseline-browser-mapping": "^2.11.27",
+    "baseline-browser-mapping": "^2.11.28",
     "chai": "^6.2.2",
     "eslint": "^10.10.0",
     "eslint-plugin-react": "^7.37.5",
@@ -109,7 +109,7 @@
     "jsdom": "^30.0.1",
     "playwright": "^1.63.0",
     "postcss": "^8.5.26",
-    "react-is": "^19.3.0",
+    "react-is": "^19.3.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.2.0",
     "ts-node": "^10.9.2",
@@ -118,7 +118,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.66.0",
     "util": "^0.12.5",
-    "vite": "^8.2.2",
+    "vite": "^8.3.5",
     "vitest": "^4.1.11"
   },
   "overrides": {

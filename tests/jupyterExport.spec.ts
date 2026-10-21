@@ -32,7 +32,12 @@ describe('jupyterExport', () => {
     expect(markdown).toContain('Embedded Session Results');
     expect(code).toContain('session_rows = json.loads');
     expect(code).toContain('session_df = pd.DataFrame(session_rows)');
-    expect(code).toContain("result_map = ret.results if hasattr(ret, 'results') else ret");
+    expect(markdown).toContain('python -m pip install bionetgen');
+    expect(markdown).toContain('jupyter lab <downloaded_notebook>.ipynb');
+    expect(code).toContain('Missing notebook dependencies:');
+    expect(code).toContain('sys.executable} -m pip install bionetgen');
+    expect(code).toContain("result_map = getattr(ret, 'results', None)");
+    expect(code).toContain("result_map = getattr(ret, 'gdats', ret)");
     expect(code).toContain("plt.plot(session_df['time']");
   });
 
