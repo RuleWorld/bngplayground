@@ -166,7 +166,7 @@ describe('ParameterScanTab component', () => {
         vi.mocked(bnglService.releaseModel).mockResolvedValue(undefined);
 
         render(<ParameterScanTab model={seedLinkedModel()} />);
-        const advanced = screen.getByRole('checkbox', { name: /direct amounts for all species/i });
+        const advanced = screen.getByRole('checkbox', { name: /show species initial amounts/i });
 
         fireEvent.click(advanced);
         const labels = optionLabels(axisSelect(1));
@@ -190,7 +190,7 @@ describe('ParameterScanTab component', () => {
         vi.mocked(bnglService.releaseModel).mockResolvedValue(undefined);
 
         render(<ParameterScanTab model={seedLinkedModel()} />);
-        fireEvent.click(screen.getByRole('checkbox', { name: /direct amounts for all species/i }));
+        fireEvent.click(screen.getByRole('checkbox', { name: /show species initial amounts/i }));
         fireEvent.click(screen.getByRole('radio', { name: /2D scan/i }));
         expect(screen.queryByRole('note')).toBeNull();
 

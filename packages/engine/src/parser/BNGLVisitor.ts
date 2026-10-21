@@ -1197,6 +1197,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         ? (String(args.print_functions).trim() === '1' || String(args.print_functions).trim().toLowerCase() === 'true')
         : undefined,
       poplevel: args.poplevel !== undefined ? evalNumericArg(args.poplevel, 100) : undefined,
+      seed: args.seed !== undefined ? evalIntArg(args.seed, 1) : undefined,
     };
     visitorDebugLog(`[BNGLVisitor] evaluated phase:`, phase);
 

@@ -75,7 +75,7 @@ export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, 
       <div className="p-4 rounded-md bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 flex items-start gap-3 shrink-0">
         <InfoIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
         <p className="text-sm">
-          <b>Steady-state finder:</b> Runs an adaptive ODE sweep until consecutive RK4 sub-steps change by less than 1e-6 (12 times in a row). The final point in the "Time Course" tab is the detected steady state.
+          <b>Steady-state finder:</b> Runs an ODE simulation and stops when the derivative norm falls below the configured tolerance. This checks numerical settling; it does not test stability with eigenvalues or a Jacobian. Compare the last reported concentrations with the Time Courses tab.
         </p>
       </div>
 
@@ -98,7 +98,7 @@ export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, 
               <div>
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Final Concentrations</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  System equilibrated at t = {formatValue(finalStateData.time)}
+                  Last reported time point: t = {formatValue(finalStateData.time)}
                 </p>
               </div>
               {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}

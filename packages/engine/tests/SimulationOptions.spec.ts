@@ -2,7 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { simulate } from '../src/index';
 import { BNGLModel, SimulationOptions } from '../src/types';
-import { resolveSimulationPhasesForRun } from '../src/services/simulation/SimulationLoop';
+import { resolveSimulationPhasesForRun, resolveStochasticSeedForPhase, resolveStochasticSeedForRun } from '../src/services/simulation/SimulationLoop';
+import { getSimulationOptionsFromParsedModel } from '../src/utils/simulationOptions';
 
 // Mock ODESolver
 const mockIntegrate = vi.fn().mockImplementation((_times, ..._args) => {
@@ -344,5 +345,106 @@ describe('SimulationOptions', () => {
             n_steps: 0,
         } as SimulationOptions);
         expect(zero[0].n_steps).toBe(1);
+    });
+
+    it('38. assigns a new seed on each unseeded stochastic run', () => {
+        const randomSpy = vi.spyOn(Math, 'random')
+            .mockReturnValueOnce(0.1)
+            .mockReturnValueOnce(0.8);
+        const options: SimulationOptions = { method: 'ssa', t_end: 10, n_steps: 10 };
+
+        const firstRun = resolveStochasticSeedForRun(options, baseModel);
+        const secondRun = resolveStochasticSeedForRun(options, baseModel);
+
+        expect(firstRun.seed).toBe(100000);
+        expect(secondRun.seed).toBe(800000);
+        expect(firstRun.seed).not.toBe(secondRun.seed);
+        expect(randomSpy).toHaveBeenCalledTimes(2);
+        randomSpy.mockRestore();
+    });
+
+    it.each(['ssa', 'nf', 'pla', 'psa'] as const)(
+        '39. preserves an explicit %s run seed', (method) => {
+            const randomSpy = vi.spyOn(Math, 'random');
+            const options: SimulationOptions = { method, t_end: 10, n_steps: 10, seed: 357 };
+
+            expect(resolveStochasticSeedForRun(options, baseModel).seed).toBe(357);
+            expect(randomSpy).not.toHaveBeenCalled();
+            randomSpy.mockRestore();
+        },
+    );
+
+    it('40. preserves an authored stochastic phase seed and leaves ODE runs unseeded', () => {
+        const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+        baseModel.simulationPhases = [{ method: 'pla', t_end: 10, n_steps: 10, seed: 73 }];
+        const authored = resolveStochasticSeedForRun(
+            { method: 'pla', t_end: 10, n_steps: 10 },
+            baseModel,
+        );
+        expect(authored.seed).toBeUndefined();
+        expect(resolveStochasticSeedForPhase(authored, baseModel, baseModel.simulationPhases[0])).toBe(73);
+
+        const odeOptions: SimulationOptions = { method: 'ode', t_end: 10, n_steps: 10 };
+        expect(resolveStochasticSeedForRun(odeOptions, baseModel)).toBe(odeOptions);
+        expect(randomSpy).not.toHaveBeenCalled();
+        randomSpy.mockRestore();
+    });
+
+    it('41. resolves mixed-workflow seeds at the stochastic phase, without leaking later seeds backward', () => {
+        const randomSpy = vi.spyOn(Math, 'random')
+            .mockReturnValueOnce(0.2)
+            .mockReturnValueOnce(0.7);
+        const odePhase = { method: 'ode' as const, t_end: 5, n_steps: 5 };
+        const firstNfPhase = { method: 'nf' as const, t_end: 10, n_steps: 10 };
+        const seededLaterNfPhase = { method: 'nf' as const, t_end: 20, n_steps: 20, seed: 812 };
+        baseModel.simulationPhases = [odePhase, firstNfPhase, seededLaterNfPhase];
+        const defaultOptions: SimulationOptions = { method: 'default', t_end: 20, n_steps: 20 };
+
+        // The later authored seed must not seed an earlier NF phase.
+        expect(resolveStochasticSeedForRun(defaultOptions, baseModel)).toBe(defaultOptions);
+        expect(resolveStochasticSeedForPhase(defaultOptions, baseModel, firstNfPhase)).toBe(200000);
+        expect(resolveStochasticSeedForPhase(defaultOptions, baseModel, seededLaterNfPhase)).toBe(812);
+        expect(resolveStochasticSeedForPhase(defaultOptions, baseModel, firstNfPhase)).toBe(700000);
+        expect(randomSpy).toHaveBeenCalledTimes(2);
+        randomSpy.mockRestore();
+    });
+
+    it('42. lets a manually entered UI seed override authored phase seeds', () => {
+        baseModel.simulationPhases = [{ method: 'nf', t_end: 10, n_steps: 10, seed: 812 }];
+        const options: SimulationOptions = { method: 'nf', t_end: 10, n_steps: 10, seed: 357 };
+        expect(resolveStochasticSeedForPhase(options, baseModel, baseModel.simulationPhases[0])).toBe(357);
+    });
+
+    it('preserves distinct authored seeds through UI option defaults for a multi-phase workflow', () => {
+        const randomSpy = vi.spyOn(Math, 'random');
+        const firstPhase = { method: 'nf' as const, t_end: 10, n_steps: 10, seed: 11 };
+        const secondPhase = { method: 'nf' as const, t_end: 20, n_steps: 20, seed: 22 };
+        baseModel.simulationPhases = [firstPhase, secondPhase];
+        const defaults = getSimulationOptionsFromParsedModel(baseModel, 'nf');
+
+        expect(defaults.seed).toBeUndefined();
+        expect(resolveStochasticSeedForPhase(defaults, baseModel, firstPhase)).toBe(11);
+        expect(resolveStochasticSeedForPhase(defaults, baseModel, secondPhase)).toBe(22);
+        expect(randomSpy).not.toHaveBeenCalled();
+        randomSpy.mockRestore();
+    });
+
+    it('43. changes unseeded SSA trajectories between runs and repeats explicit-seed trajectories', async () => {
+        const randomSpy = vi.spyOn(Math, 'random')
+            .mockReturnValueOnce(0.11)
+            .mockReturnValueOnce(0.82);
+        const unseededOptions: SimulationOptions = { method: 'ssa', t_end: 10, n_steps: 10 };
+        const unseededFirst = await simulate(1, baseModel, unseededOptions, mockCallbacks);
+        const unseededSecond = await simulate(2, baseModel, unseededOptions, mockCallbacks);
+        expect(randomSpy).toHaveBeenCalledTimes(2);
+        expect(unseededFirst.data).not.toEqual(unseededSecond.data);
+
+        randomSpy.mockClear();
+        const seededOptions: SimulationOptions = { ...unseededOptions, seed: 731 };
+        const seededFirst = await simulate(3, baseModel, seededOptions, mockCallbacks);
+        const seededSecond = await simulate(4, baseModel, seededOptions, mockCallbacks);
+        expect(randomSpy).not.toHaveBeenCalled();
+        expect(seededFirst.data).toEqual(seededSecond.data);
+        randomSpy.mockRestore();
     });
 });

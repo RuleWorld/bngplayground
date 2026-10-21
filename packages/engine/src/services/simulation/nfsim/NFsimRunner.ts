@@ -3,6 +3,7 @@ import { generateExpandedNetwork } from '../NetworkExpansion';
 import { loadEvaluator } from '../ExpressionEvaluator';
 import { simulate } from '../SimulationLoop';
 import { BNGXMLWriter } from '../BNGXMLWriter';
+import { createRandomSimulationSeed } from '../../../utils/random';
 import { runNFsim } from './NFsimLoader';
 import { NFsimResultAdapter } from './NFsimResultAdapter';
 import { NFsimValidator, type ValidationResult } from './NFsimValidator';
@@ -112,6 +113,7 @@ export async function runNFsimSimulation(
     const { includeSpeciesData, includeExpandedNetwork, ...runtimeOptions } = options;
     const runOptions = {
       ...runtimeOptions,
+      seed: options.seed ?? createRandomSimulationSeed(),
       cb: options.cb ?? hasSpeciesObservables
     };
     // Attach a progress callback so we can forward NFsim stdout lines to the main thread as 'progress' messages

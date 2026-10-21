@@ -21,7 +21,7 @@
  *  - bionetgen-cpp/src/engine/PsaSimulator.cpp
  */
 
-import { SeededRandom } from '../../utils/random';
+import { SeededRandom, createRandomSimulationSeed } from '../../utils/random';
 import { FenwickTree } from '../../utils/fenwickTree';
 import { splitObservablePatterns } from '../../utils/observableUtils';
 import { countPatternMatches } from '../parity/PatternMatcher';
@@ -569,6 +569,7 @@ export async function simulatePSA(
   model: BNGLModel,
   options: PSAOptions,
 ): Promise<SimulationResults> {
-  const simulator = new PSASimulator(options.seed);
-  return simulator.simulate(model, options);
+  const runOptions = { ...options, seed: options.seed ?? createRandomSimulationSeed() };
+  const simulator = new PSASimulator(runOptions.seed);
+  return simulator.simulate(model, runOptions);
 }

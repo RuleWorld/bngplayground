@@ -11,7 +11,21 @@ exports[`jupyterExport snapshot > generates a complete valid notebook structure 
       "source": [
         "# BioNetGen Analysis: SnapshotModelWithData
 ",
-        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.",
+        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.
+
+",
+        "## Before you run it
+
+",
+        "Use the same Python environment as your Jupyter kernel. Install the packages in a terminal with:
+
+",
+        "\`\`\`bash
+python -m pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+\`\`\`
+
+",
+        "Open the downloaded file in VS Code with its Jupyter extension or in Jupyter Notebook. If you need JupyterLab, install it with \`python -m pip install jupyterlab\` and launch with \`jupyter lab <downloaded_notebook>.ipynb\`. The install package is named \`bionetgen\` (the Python import is \`bionetgen\`). From a notebook, run \`%pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy\` in a separate cell and restart the kernel before running this notebook. BioNetGen also needs Perl available for its command-line simulation path.",
       ],
     },
     {
@@ -20,9 +34,43 @@ exports[`jupyterExport snapshot > generates a complete valid notebook structure 
         "language": "python",
       },
       "source": [
-        "# Install dependencies if needed
+        "# Check notebook prerequisites before running later analysis cells.
 ",
-        "# !pip install pybionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+        "import importlib.util
+",
+        "import sys
+",
+        "required_packages = {
+",
+        "    "bionetgen": "bionetgen",
+",
+        "    "numpy": "numpy",
+",
+        "    "pandas": "pandas",
+",
+        "    "matplotlib": "matplotlib",
+",
+        "    "seaborn": "seaborn",
+",
+        "    "scipy": "scipy",
+",
+        "    "roadrunner": "libroadrunner",
+",
+        "}
+",
+        "missing_packages = [package for module, package in required_packages.items() if importlib.util.find_spec(module) is None]
+",
+        "if missing_packages:
+",
+        "    raise ImportError(
+",
+        "        "Missing notebook dependencies: " + ", ".join(missing_packages) + ". "
+",
+        "        f"Install them into this kernel with: {sys.executable} -m pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy. Then restart the kernel."
+",
+        "    )
+",
+        "print(f"Using Python kernel: {sys.executable}")
 ",
         "import bionetgen
 ",
@@ -177,17 +225,39 @@ end model"""
 ",
         "    base_name = os.path.splitext(os.path.basename(model_file))[0]
 ",
-        "    result_map = ret.results if hasattr(ret, 'results') else ret
+        "    result_map = getattr(ret, 'results', None)
 ",
-        "    if not isinstance(result_map, dict) or len(result_map) == 0:
+        "    if result_map is None:
 ",
-        "        raise RuntimeError("No simulation result map was returned by bionetgen.run")
+        "        result_map = getattr(ret, 'gdats', ret)
 ",
-        "    result_key = base_name if base_name in result_map else next(iter(result_map.keys()))
+        "    if isinstance(result_map, dict):
 ",
-        "    print(f"Using result key: {result_key}")
+        "        if not result_map:
 ",
-        "    sim_df = to_dataframe(result_map[result_key])
+        "            raise RuntimeError("PyBioNetGen returned no GDAT simulation results")
+",
+        "        result_key = base_name if base_name in result_map else next(iter(result_map))
+",
+        "        print(f"Using result key: {result_key}")
+",
+        "        sim_df = to_dataframe(result_map[result_key])
+",
+        "    elif isinstance(result_map, (list, tuple)):
+",
+        "        if not result_map:
+",
+        "            raise RuntimeError("PyBioNetGen returned an empty GDAT result list")
+",
+        "        sim_df = to_dataframe(result_map[0])
+",
+        "    else:
+",
+        "        sim_df = to_dataframe(result_map)
+",
+        "    if sim_df.empty:
+",
+        "        raise RuntimeError("The simulation completed but returned an empty GDAT table")
 ",
         "except Exception as err:
 ",
@@ -205,7 +275,7 @@ end model"""
 ",
         "    except Exception as fallback_err:
 ",
-        "        raise RuntimeError(f"Both simulation paths failed: {fallback_err}")
+        "        raise RuntimeError(f"Both simulation paths failed: bionetgen.run() failed ({err}); fallback failed ({fallback_err})")
 
 ",
         "display(sim_df.head())
@@ -900,7 +970,21 @@ exports[`jupyterExport snapshot > generates a complete valid notebook structure 
       "source": [
         "# BioNetGen Analysis: SnapshotModel
 ",
-        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.",
+        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.
+
+",
+        "## Before you run it
+
+",
+        "Use the same Python environment as your Jupyter kernel. Install the packages in a terminal with:
+
+",
+        "\`\`\`bash
+python -m pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+\`\`\`
+
+",
+        "Open the downloaded file in VS Code with its Jupyter extension or in Jupyter Notebook. If you need JupyterLab, install it with \`python -m pip install jupyterlab\` and launch with \`jupyter lab <downloaded_notebook>.ipynb\`. The install package is named \`bionetgen\` (the Python import is \`bionetgen\`). From a notebook, run \`%pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy\` in a separate cell and restart the kernel before running this notebook. BioNetGen also needs Perl available for its command-line simulation path.",
       ],
     },
     {
@@ -909,9 +993,43 @@ exports[`jupyterExport snapshot > generates a complete valid notebook structure 
         "language": "python",
       },
       "source": [
-        "# Install dependencies if needed
+        "# Check notebook prerequisites before running later analysis cells.
 ",
-        "# !pip install pybionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+        "import importlib.util
+",
+        "import sys
+",
+        "required_packages = {
+",
+        "    "bionetgen": "bionetgen",
+",
+        "    "numpy": "numpy",
+",
+        "    "pandas": "pandas",
+",
+        "    "matplotlib": "matplotlib",
+",
+        "    "seaborn": "seaborn",
+",
+        "    "scipy": "scipy",
+",
+        "    "roadrunner": "libroadrunner",
+",
+        "}
+",
+        "missing_packages = [package for module, package in required_packages.items() if importlib.util.find_spec(module) is None]
+",
+        "if missing_packages:
+",
+        "    raise ImportError(
+",
+        "        "Missing notebook dependencies: " + ", ".join(missing_packages) + ". "
+",
+        "        f"Install them into this kernel with: {sys.executable} -m pip install bionetgen libroadrunner numpy matplotlib pandas seaborn scipy. Then restart the kernel."
+",
+        "    )
+",
+        "print(f"Using Python kernel: {sys.executable}")
 ",
         "import bionetgen
 ",
@@ -1003,17 +1121,39 @@ end model"""
 ",
         "    base_name = os.path.splitext(os.path.basename(model_file))[0]
 ",
-        "    result_map = ret.results if hasattr(ret, 'results') else ret
+        "    result_map = getattr(ret, 'results', None)
 ",
-        "    if not isinstance(result_map, dict) or len(result_map) == 0:
+        "    if result_map is None:
 ",
-        "        raise RuntimeError("No simulation result map was returned by bionetgen.run")
+        "        result_map = getattr(ret, 'gdats', ret)
 ",
-        "    result_key = base_name if base_name in result_map else next(iter(result_map.keys()))
+        "    if isinstance(result_map, dict):
 ",
-        "    print(f"Using result key: {result_key}")
+        "        if not result_map:
 ",
-        "    sim_df = to_dataframe(result_map[result_key])
+        "            raise RuntimeError("PyBioNetGen returned no GDAT simulation results")
+",
+        "        result_key = base_name if base_name in result_map else next(iter(result_map))
+",
+        "        print(f"Using result key: {result_key}")
+",
+        "        sim_df = to_dataframe(result_map[result_key])
+",
+        "    elif isinstance(result_map, (list, tuple)):
+",
+        "        if not result_map:
+",
+        "            raise RuntimeError("PyBioNetGen returned an empty GDAT result list")
+",
+        "        sim_df = to_dataframe(result_map[0])
+",
+        "    else:
+",
+        "        sim_df = to_dataframe(result_map)
+",
+        "    if sim_df.empty:
+",
+        "        raise RuntimeError("The simulation completed but returned an empty GDAT table")
 ",
         "except Exception as err:
 ",
@@ -1031,7 +1171,7 @@ end model"""
 ",
         "    except Exception as fallback_err:
 ",
-        "        raise RuntimeError(f"Both simulation paths failed: {fallback_err}")
+        "        raise RuntimeError(f"Both simulation paths failed: bionetgen.run() failed ({err}); fallback failed ({fallback_err})")
 
 ",
         "display(sim_df.head())

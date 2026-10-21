@@ -267,6 +267,8 @@ export interface SimulationPhase {
     print_CDAT?: boolean;
     /** PSA: population threshold for ODE vs SSA partitioning (default 100) */
     poplevel?: number;
+    /** Explicit random seed authored for this stochastic simulation phase. */
+    seed?: number;
 }
 
 export interface ConcentrationChange {

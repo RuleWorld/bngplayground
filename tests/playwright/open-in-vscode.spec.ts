@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('Open-in-VSCode modal should open without hook errors', async ({ page }) => {
+test('Header resources and editor import/export flows work without hook errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text());
@@ -23,9 +23,18 @@ test('Open-in-VSCode modal should open without hook errors', async ({ page }) =>
   }
   if (!opened) throw new Error('Could not open any URL candidate. Start the dev server (npm run dev) or set URL env var.');
 
-  // Ensure header VS Code button is removed (not present)
-  const headerBtn = page.locator('button[title="Open model in VS Code"]');
-  await expect(headerBtn).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const label of ['BNGL Syntax Guide', 'About BNG Playground', 'Contact Us', 'Help & Resources']) {
+    const control = page.getByRole(label === 'Help & Resources' ? 'link' : 'button', { name: label });
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await expect(page.getByText('Open In VS Code', { exact: true })).toHaveCount(0);
 
   // --- Editor load/export checks ---
   const fileInput = page.getByTestId('editor-load-input');
@@ -34,77 +43,47 @@ test('Open-in-VSCode modal should open without hook errors', async ({ page }) =>
   expect(acceptAttr).toContain('.sbml');
   expect(acceptAttr).toContain('.xml');
 
-  const exportBtn = page.getByRole('button', { name: 'Export SBML' });
-  await expect(exportBtn).toBeVisible();
-  // Export button present; state (enabled/disabled) depends on whether a model is loaded.
+  const exportMenu = page.getByRole('button', { name: 'Export options' });
+  await expect(exportMenu).toBeVisible();
+  await exportMenu.click();
+  await expect(page.getByText('Export SBML', { exact: true })).toBeVisible();
+  await expect(page.getByText('Export BNGL', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Parse BNGL code' }).click();
 
-  // Stub navigator.clipboard.writeText to avoid permission issues in headless
-  await page.evaluate(() => {
-    // @ts-ignore
-    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
-      // @ts-ignore
-      (navigator as any).clipboard = { writeText: (s: string) => { console.log('clipboard.writeText called'); return Promise.resolve(); } };
-    }
+  // Help resources and BioModels-by-ID are exposed in their dedicated locations.
+  for (const label of ['BNGL Syntax Guide', 'About BNG Playground', 'Contact Us']) {
+    await expect(page.getByRole('button', { name: label })).toBeVisible();
+  }
+  const helpLink = page.getByRole('link', { name: 'Help & Resources' });
+  await expect(helpLink).toHaveAttribute('href', 'https://bionetgen.org');
+  await expect(page.getByRole('button', { name: 'Visualization Key' })).toHaveCount(0);
 
-    // Prevent protocol navigation by trapping location setter
-    try {
-      const origLocation = window.location;
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        enumerable: true,
-        get: () => origLocation,
-        set: (v) => { console.log('Attempted to set location to ' + v); }
-      });
-    } catch (e) {
-      // ignore if not allowed
-      console.warn('Could not redefine location:', e);
-    }
-  });
+  await page.getByRole('button', { name: 'Analysis options' }).click();
+  await page.getByText('🎨 Rule Cartoons', { exact: true }).click();
+  await expect(page.getByText('Rule Cartoon key', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open In VS Code' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Visualization Key' })).toHaveCount(0);
 
-  // Click header button to open modal
-  await headerBtn.click();
-
-  // Wait for modal title
-  await expect(page.locator('text=Open in VS Code')).toBeVisible({ timeout: 3000 });
-
-  // Test header import -> BioModels flow
-  const helpBtn = page.getByTitle('Help & Resources');
-  await expect(helpBtn).toBeVisible();
-  await helpBtn.click();
-  // Click Import from BioModels item in dropdown
-  const headerBioModels = page.locator('text=Import from BioModels...').first();
-  await expect(headerBioModels).toBeVisible();
-  await headerBioModels.click();
-  await expect(page.locator('text=Import from BioModels')).toBeVisible({ timeout: 2000 });
-  // Close the modal
-  await page.locator('button', { hasText: 'Cancel' }).click();
-
-  // Test Editor Load dropdown -> BioModels flow
-  const modelsBtn = page.getByTestId('editor-panel').getByRole('button', { name: 'Models' });
-  await modelsBtn.click();
-  // Ensure editor panel exists then click Load dropdown
-  const loadTrigger = page.locator('button', { hasText: 'Load' }).first();
-  await loadTrigger.click();
-  const editorBioModels = page.locator('div', { hasText: 'Import from BioModels...' }).first();
-  await editorBioModels.click();
-  await expect(page.locator('text=Import from BioModels')).toBeVisible({ timeout: 2000 });
-  await page.locator('button', { hasText: 'Cancel' }).click();
-
-  // Ensure BioModels search section is visible and input is present
-  await expect(page.getByPlaceholder('Search BioModels (e.g., MAPK)')).toBeVisible();
+  // BioModels-by-ID is available from the Editor Load menu.
+  await page.getByRole('button', { name: 'Load model' }).click();
+  await page.getByRole('menuitem', { name: 'Import from BioModels...', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Import from BioModels' })).toBeVisible({ timeout: 2000 });
+  await expect(page.getByPlaceholder('BioModels ID')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
 
   // Look for React hook error / minified React error #310 after other interactions
   const foundHookError = errors.find(e => e.includes('Rendered more hooks') || e.includes('Minified React error #310') || e.includes('Rendered more hooks than during the previous render'));
 
   expect(foundHookError).toBeUndefined();
 
-  // --- Additional check for Example gallery totals ---
-  // Editor "Models" gallery is already open from earlier; reuse the models button
-  // Ensure the gallery modal is visible (it should be open after clicking Models above)
+});
+
+test('Example gallery category totals match the header count', async ({ page }) => {
+  await page.goto(process.env.URL || 'http://localhost:3000/bngplayground/', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Browse example models' }).click();
+
   const galleryDialog = page.getByRole('dialog', { name: 'BNGL Models' });
   await expect(galleryDialog).toBeVisible({ timeout: 3000 });
-
-
   const headerPara = await galleryDialog.locator('p').filter({ hasText: 'Browse' }).first().textContent();
   if (!headerPara) throw new Error('Gallery header paragraph not found');
 
@@ -112,17 +91,12 @@ test('Open-in-VSCode modal should open without hook errors', async ({ page }) =>
   if (!shownCountMatch) throw new Error('Could not parse model count from header: ' + headerPara);
   const shownCount = Number(shownCountMatch[1]);
 
-  // Sum counts from the category buttons visible in the modal
   const catButtons = await galleryDialog.locator('button').allTextContents();
   let sum = 0;
   const parenRE = /\((\d+)\)/g;
   for (const txt of catButtons) {
-    let m: RegExpExecArray | null;
-    while ((m = parenRE.exec(txt)) !== null) {
-      sum += Number(m[1]);
-    }
+    let match: RegExpExecArray | null;
+    while ((match = parenRE.exec(txt)) !== null) sum += Number(match[1]);
   }
-
-  // Expect the header count to match the sum of category counts
   expect(shownCount).toBe(sum);
 });

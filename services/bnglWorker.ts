@@ -52,12 +52,12 @@ const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
 
 const jobStates = new Map<number, JobState>();
 let activeSimulationJobId: number | null = null;
-let activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | null = null;
+let activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' | null = null;
 
 export function mergeSimulationOptionsWithModelActionDefaults(
   options: SimulationOptions,
   model: BNGLModel,
-  effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla'
+  effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa'
 ): SimulationOptions {
   const merged = { ...options };
 
@@ -576,13 +576,13 @@ if (typeof ctx.addEventListener === 'function') {
           // 1. Explicit override from options.method (if not 'default')
           // 2. Explicit method in model actions/phases (if they exist)
           // 3. Fallback to 'ode'
-          let effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' = 'ode';
+          let effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' = 'ode';
 
           if (options.method && options.method !== 'default') {
-            effectiveMethod = options.method as 'ode' | 'ssa' | 'nf' | 'pla';
+            effectiveMethod = options.method as 'ode' | 'ssa' | 'nf' | 'pla' | 'psa';
           } else if (phases.length > 0) {
             const m = phases[0].method;
-            if (m === 'nf' || m === 'ssa' || m === 'ode' || m === 'pla') {
+            if (m === 'nf' || m === 'ssa' || m === 'ode' || m === 'pla' || m === 'psa') {
               effectiveMethod = m;
             }
           }

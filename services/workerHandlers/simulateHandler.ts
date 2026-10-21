@@ -37,7 +37,7 @@ import type { JobState } from './types';
 /** Mutable simulation-tracking state owned by the worker. */
 export interface SimulationState {
   activeSimulationJobId: number | null;
-  activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | null;
+  activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' | null;
 }
 
 export interface WorkerContext {
@@ -182,13 +182,13 @@ export async function handleSimulate(
     const phases = model.simulationPhases || [];
 
     // Resolve effective method from 'default' (Auto) to explicit 'ode'/'ssa'/'nf'
-    let effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' = 'ode';
+    let effectiveMethod: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' = 'ode';
 
     if (options.method && options.method !== 'default') {
-      effectiveMethod = options.method as 'ode' | 'ssa' | 'nf' | 'pla';
+      effectiveMethod = options.method as 'ode' | 'ssa' | 'nf' | 'pla' | 'psa';
     } else if (phases.length > 0) {
       const m = phases[0].method;
-      if (m === 'nf' || m === 'ssa' || m === 'ode' || m === 'pla') {
+      if (m === 'nf' || m === 'ssa' || m === 'ode' || m === 'pla' || m === 'psa') {
         effectiveMethod = m;
       }
     }

@@ -56,8 +56,16 @@ export const CartoonTab: React.FC<CartoonTabProps> = ({ model, selectedRuleId, o
       </TabList>
       <TabPanels>
         <TabPanel>
-          <div className="mb-3 text-sm text-slate-600 dark:text-slate-400">Compact rule icons: 🔗 bind • ✂️ unbind • 🌀 state change — green represents new bonds</div>
-          <div className="mb-3 text-xs text-slate-500 dark:text-slate-400">Legend: molecules use hashed colors; <span className="font-semibold">grey</span> molecules are context-only, <span className="font-semibold">colored</span> molecules are affected or created.</div>
+          <details open className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+            <summary className="cursor-pointer font-semibold text-slate-800 dark:text-slate-100">Rule Cartoon key</summary>
+            <ul className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+              <li><strong>Molecules:</strong> boxes identify molecule types; grey shows unchanged context and colored boxes show affected or created molecules.</li>
+              <li><strong>Sites:</strong> small circles are binding sites; labels such as <span className="font-mono">~P</span> and <span className="font-mono">~U</span> show states.</li>
+              <li><strong>Bonds:</strong> lines connect bonded sites; matching BNGL labels such as <span className="font-mono">!1</span> mark the two bond ends.</li>
+              <li><strong>Site marks:</strong> <span className="font-mono">–</span> means free, <span className="font-mono">🔗</span> means bound, and <span className="font-mono">?</span> allows either (BNGL wildcard).</li>
+              <li><strong>Compact icons:</strong> 🔗 bind, ✂️ unbind, 🌀 state change; green highlights new bonds.</li>
+            </ul>
+          </details>
           <div className="max-h-[60vh] space-y-6 overflow-y-auto pr-2">
             {ruleDescriptors.map((rule) => (
               <RuleCartoon

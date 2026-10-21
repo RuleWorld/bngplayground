@@ -38,53 +38,15 @@ A(b,Y~U) + B(a) <-> A(b!1,Y~U).B(a!1)  kf, kr`}
         );
     }
 
-    // Visualization Conventions
-    if (focus === 'viz') {
-        return (
-            <Modal isOpen={isOpen} onClose={onClose} title="Visualization Conventions">
-                <div className="prose dark:prose-invert max-w-none">
-                    <h4>Rule Cartoons</h4>
-                    <ul>
-                        <li><strong>Molecules</strong> — Colored rectangles with rounded corners; color derived from name</li>
-                        <li><strong>Components</strong> — Small circles inside molecules representing binding sites</li>
-                        <li><strong>States</strong> — Shown as text (e.g., <code>~P</code>, <code>~U</code>) next to components</li>
-                        <li><strong>Bonds</strong> — Lines connecting components with matching bond labels (<code>!1</code>)</li>
-                    </ul>
-                    <h4>Contact Map</h4>
-                    <ul>
-                        <li><strong>Molecule nodes</strong> — Large colored boxes containing their components</li>
-                        <li><strong>Component nodes</strong> — Gray rounded rectangles inside molecules</li>
-                        <li><strong>State nodes</strong> — Yellow rounded rectangles showing possible states</li>
-                        <li><strong>Binding edges</strong> — Solid lines showing possible bonds between components</li>
-                        <li><strong>Unbinding edges</strong> — <span className="text-red-500">Red dotted lines</span> showing bond-breaking reactions</li>
-                    </ul>
-                    <h4>Color Assignment</h4>
-                    <p>Each molecule's color is <em>deterministically derived from its name</em> for consistency across all visualizations.</p>
-                </div>
-            </Modal>
-        );
-    }
-
     // Default: About
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="About BioNetGen Playground">
             <div className="prose dark:prose-invert max-w-none">
                 <p>
-                    An <strong>interactive web-based playground</strong> for the <em>BioNetGen Language (BNGL)</em> — write, parse, simulate, and visualize rule-based models of biochemical systems.
+                    BioNetGen Playground is an interactive workspace for learning and exploring rule-based models. Load an example or write BNGL, run simulations, inspect reaction rules and networks, compare model behavior, and explore analysis tools in one place.
                 </p>
-                <h4>Features</h4>
-                <ul>
-                    <li><strong>BNGL Editor</strong> — Syntax highlighting with example gallery</li>
-                    <li><strong>Network Generation</strong> — Automatic expansion of rules into species and reactions</li>
-                    <li><strong>ODE/SSA Simulation</strong> — Multiple solvers including <em>CVODE</em>, <em>Rosenbrock23</em>, <em>RK45</em></li>
-                    <li><strong>Visualizations</strong> — Time-course plots, contact maps, rule cartoons, regulatory graphs</li>
-                    <li><strong>Steady-State Finder</strong> — Automatic detection when concentrations converge</li>
-                    <li><strong>FIM Analysis</strong> — Fisher Information Matrix for parameter identifiability</li>
-                    <li><strong>SBML Export</strong> — Export models to SBML Level 3 format</li>
-                </ul>
-                <h4>Technology</h4>
-                <p className="text-sm">
-                    Built with <strong>React</strong>, <strong>TypeScript</strong>, and <strong>WebAssembly</strong> (CVODE solver). All computation runs in your browser — no server required.
+                <p>
+                    The playground includes interactive examples, model editing, deterministic and stochastic simulation, network and rule visualizations, parameter analysis, and export tools. It is designed for learning and exploratory work; results depend on the model and selected methods.
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
                     <em>This is an educational tool. For production modeling, use the official <a href="https://bionetgen.org" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline" aria-label="Visit BioNetGen website">BioNetGen software</a>.</em>

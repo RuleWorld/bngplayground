@@ -10,7 +10,6 @@ import { bnglService } from './services/bnglService';
 import { exportToNet } from './services/exportNet';
 import { exportToSedML } from './services/exportSedML';
 import { exportToOMEX } from './services/exportOMEX';
-import { VSCodeAnalysisContext } from './components/VSCodeExportModal';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
 import { loadModelCatalog, getModelCatalogSync, findCatalogExampleByQuery, type CatalogExample } from './services/modelCatalog';
@@ -1163,17 +1162,6 @@ function App() {
     }
   };
 
-  // Passed by reference and serialized only when the VS Code export modal is
-  // open — a deep clone here would run on every render and blow the string
-  // length limit once results carry a large SSA firing log.
-  const vscodeAnalysis: VSCodeAnalysisContext | null = code?.trim()
-    ? {
-        activeTabIndex: activeVizTab,
-        simulationOptions: simOptions ? { ...simOptions } as Record<string, unknown> : null,
-        simulationResults: results,
-      }
-    : null;
-
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       {/* Export SBML handler exposed to Header and EditorPanel */}
@@ -1182,18 +1170,10 @@ function App() {
           setAboutFocus(focus ?? null);
           setIsAboutModalOpen(true);
         }}
-        onExportSBML={handleExportSBML}
-        onImportSBML={handleImportSBML}
-        onExportSedML={handleExportSedML}
-        onExportOMEX={handleExportOMEX}
-        onExportNET={handleExportNET}
-        onExportODE={handleExportODE}
-        onExportBNGL={handleExportBNGL}
         code={code}
         modelName={loadedModelName}
         modelId={loadedModelId}
         onModelNameChange={setLoadedModelName}
-        vscodeAnalysis={vscodeAnalysis}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
       />

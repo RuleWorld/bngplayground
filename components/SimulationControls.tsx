@@ -357,7 +357,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   <label
                     htmlFor="sim-ssa-seed"
                     className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
-                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                    title="Random seed for reproducible stochastic simulations. Leave empty to choose a new random seed for each run."
                   >
                     Seed
                   </label>
@@ -384,7 +384,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   <label
                     htmlFor="sim-pla-seed"
                     className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
-                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                    title="Random seed for reproducible stochastic simulations. Leave empty to choose a new random seed for each run."
                   >
                     Seed
                   </label>
@@ -435,7 +435,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     <label
                       htmlFor="sim-psa-seed"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
-                      title="Random seed for the stochastic component. Leave empty for default seed."
+                      title="Random seed for reproducible stochastic simulations. Leave empty to choose a new random seed for each run."
                     >
                       Seed
                     </label>
@@ -445,7 +445,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       inputMode="numeric"
                       value={psaSeed}
                       onChange={e => setPsaSeed(e.target.value)}
-                      placeholder="12345"
+                      placeholder="Random"
                       className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
@@ -581,7 +581,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     <label
                       htmlFor="sim-nfsim-seed"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
-                      title="Random seed: Set for reproducible stochastic simulations. Leave empty for random seed."
+                      title="Random seed for reproducible stochastic simulations. Leave empty to choose a new random seed for each run."
                     >
                       Seed
                     </label>

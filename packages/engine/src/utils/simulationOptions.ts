@@ -53,7 +53,7 @@ function pickPhase(model: BNGLModel, method: SimulationOptions['method']): Simul
     return aggregateOdePhases(phases);
   }
 
-  if (method === 'ssa' || method === 'pla' || method === 'nf' || method === 'nfsim') {
+  if (method === 'ssa' || method === 'pla' || method === 'psa' || method === 'nf' || method === 'nfsim') {
     const exact = phases.find((p) => p.method === method);
     return exact ?? phases[0];
   }

@@ -33,7 +33,7 @@ const ComplexVisualizer: React.FC<ComplexVisualizerProps> = ({ complex, showBond
             </div>
           );
         })()}
-        {index < complex.length - 1 && <span className="text-xl text-slate-400">•</span>}
+        {index < complex.length - 1 && <span role="img" aria-label="molecules in the same complex" title="Molecules joined by a dot are part of one complex" className="text-2xl font-bold text-slate-600 dark:text-slate-300">•</span>}
       </React.Fragment>
     ))}
   </div>
@@ -183,7 +183,6 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
     <button type="button" className={containerClasses} onClick={handleSelect} aria-label={`Select rule ${displayName}`}>
       <div className="mb-3 flex items-center justify-between gap-4">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{displayName}</span>
-        <span className="text-xs font-mono text-slate-500 dark:text-slate-300">{rule.rate}</span>
       </div>
       {rule.comment && (
         <div className="mb-2 text-xs text-slate-500 dark:text-slate-300 italic">{rule.comment}</div>
@@ -218,6 +217,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
               strokeLinejoin="round"
             />
           </svg>
+          <span className="font-mono text-xs text-slate-500 dark:text-slate-300">Forward rate: {rule.rate}</span>
           {rule.isBidirectional && rule.reverseRate && (
             <>
               <svg aria-hidden="true" className="h-6 w-16 rotate-180" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -229,7 +229,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="font-mono text-xs text-slate-500 dark:text-slate-300">{rule.reverseRate}</span>
+              <span className="font-mono text-xs text-slate-500 dark:text-slate-300">Reverse rate: {rule.reverseRate}</span>
             </>
           )}
         </div>

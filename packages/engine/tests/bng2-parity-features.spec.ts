@@ -57,6 +57,35 @@ simulate({method=>"ode", t_end=>100, n_steps=>100})
     expect(actionTypes).toContain('simulate');
   });
 
+  it('preserves an authored stochastic phase seed', () => {
+    const input = `
+begin model
+begin parameters
+  k1 1
+end parameters
+begin molecule types
+  A()
+end molecule types
+begin species
+  A() 10
+end species
+begin observables
+  Molecules Atot A()
+end observables
+begin reaction rules
+  A() -> 0 k1
+end reaction rules
+end model
+simulate({method=>"ssa", t_end=>10, n_steps=>10, seed=>812})
+simulate_nf({t_end=>10, n_steps=>10, seed=>813})
+`;
+    const result = parseBNGLWithANTLR(input);
+    expect(result.model?.simulationPhases?.[0]?.seed).toBe(812);
+    expect(result.model?.actions?.[0]?.args?.seed).toBe(812);
+    expect(result.model?.simulationPhases?.[1]?.seed).toBe(813);
+    expect(result.model?.actions?.[1]?.args?.seed).toBe(813);
+  });
+
   it('should parse saveConcentrations action', () => {
     const input = `
 begin model
