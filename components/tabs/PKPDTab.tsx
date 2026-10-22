@@ -297,7 +297,9 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
         <div className="p-2 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs">{error}</div>
       )}
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      {/* min-height floors at content size so short viewports scroll the
+          container instead of crushing this row. */}
+      <div className="flex gap-4 flex-1">
         {/* Dosing Schedule (left) */}
         <Card className="w-56 shrink-0 p-3 overflow-auto">
           <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">
