@@ -334,8 +334,8 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
 
         {/* Concentration-Time Curve (center) */}
         <div className="flex-1 flex flex-col min-w-0">
-          <Card className="flex-1 p-3 min-h-[250px]">
-            <div className="flex items-center justify-between mb-2">
+          <Card className="flex-1 p-3 min-h-[250px] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-2 shrink-0">
               <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Concentration-Time Curve
               </h3>
@@ -348,8 +348,8 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
               </div>
             </div>
             {chartData.length > 0 ? (
-              <div className="h-full min-h-0 flex flex-col">
-                <div className="flex-1 min-h-[220px]">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-[160px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ ...CHART_MARGIN, bottom: 35 }}>
                     <CartesianGrid {...CHART_GRID} />
@@ -381,7 +381,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                   </ResponsiveContainer>
                 </div>
                 {/* External legend — matches TimeSeriesChart pattern */}
-                <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 pt-3 pb-5 border-t border-slate-100 dark:border-slate-800/20">
+                <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 pt-3 pb-1 shrink-0 border-t border-slate-100 dark:border-slate-800/20">
                   {observableNames.map((name, i) => (
                     <span key={name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                       <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
@@ -391,7 +391,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+              <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
                 Generate a model and run simulation to see results.
               </div>
             )}
@@ -430,16 +430,16 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
             <h4 className="text-xs font-semibold text-slate-500 mb-1">Therapeutic Window</h4>
             <div className="space-y-1">
               <div className="flex items-center gap-1">
-                <label htmlFor="pkpd-therapeutic-min" className="text-[10px] text-slate-400 w-10">Min:</label>
+                <label htmlFor="pkpd-therapeutic-min" className="text-[10px] text-slate-400 w-10 shrink-0">Min:</label>
                 <input id="pkpd-therapeutic-min" type="number" placeholder="Cmin_eff"
                   onChange={e => setTherapeuticMin(e.target.value ? Number(e.target.value) : null)}
-                  className="flex-1 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
+                  className="flex-1 min-w-0 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
               </div>
               <div className="flex items-center gap-1">
-                <label htmlFor="pkpd-therapeutic-max" className="text-[10px] text-slate-400 w-10">Max:</label>
+                <label htmlFor="pkpd-therapeutic-max" className="text-[10px] text-slate-400 w-10 shrink-0">Max:</label>
                 <input id="pkpd-therapeutic-max" type="number" placeholder="Cmax_tox"
                   onChange={e => setTherapeuticMax(e.target.value ? Number(e.target.value) : null)}
-                  className="flex-1 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
+                  className="flex-1 min-w-0 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
               </div>
             </div>
           </div>

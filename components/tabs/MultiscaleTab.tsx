@@ -423,20 +423,20 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
           )}
 
           {/* Cell view */}
-          <Card className="flex-1 p-3 min-h-[250px]">
-            <div className="flex items-center justify-between mb-2">
+          <Card className="flex-1 p-3 min-h-[250px] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-2 shrink-0">
               <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Cell Population View
               </h3>
               {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
             </div>
-            <div className="relative" ref={canvasWrapRef}>
+            <div className="relative flex-1 min-h-0" ref={canvasWrapRef}>
               <canvas
                 ref={canvasRef}
                 width={500}
                 height={400}
-                className="block w-full rounded bg-slate-900"
-                style={{ imageRendering: 'auto', aspectRatio: '5 / 4', maxHeight: '350px' }}
+                className="block absolute inset-0 w-full h-full rounded bg-slate-900"
+                style={{ imageRendering: 'auto' }}
               />
               {snapshots.length === 0 && !isRunning && (
                 <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm pointer-events-none">
@@ -467,31 +467,33 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
 
           {/* Population dynamics chart */}
           {populationTimeSeries.length > 0 && (
-            <Card className="p-3 h-48 shrink-0">
-              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+            <Card className="p-3 h-52 shrink-0 flex flex-col overflow-hidden">
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 shrink-0">
                 Population Dynamics
               </h3>
-              <ResponsiveContainer width="100%" height="85%">
-                <LineChart data={populationTimeSeries}>
-                  <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#cbd5e1" strokeOpacity={0.45} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} label={{ value: 'Time', position: 'bottom', fontSize: 10, offset: 0 }} />
-                  <YAxis tick={{ fontSize: 10 }} label={{ value: 'Cell Count', angle: -90, position: 'insideLeft', fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {Object.keys(populationTimeSeries[0] || {})
-                    .filter(k => k !== 'time')
-                    .map((key, i) => (
-                      <Line
-                        key={key}
-                        type="monotone"
-                        dataKey={key}
-                        stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                        strokeWidth={2.25}
-                        dot={false}
-                      />
-                    ))}
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="flex-1 min-h-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={populationTimeSeries}>
+                    <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#cbd5e1" strokeOpacity={0.45} />
+                    <XAxis dataKey="time" tick={{ fontSize: 10 }} label={{ value: 'Time', position: 'bottom', fontSize: 10, offset: 0 }} />
+                    <YAxis tick={{ fontSize: 10 }} label={{ value: 'Cell Count', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    {Object.keys(populationTimeSeries[0] || {})
+                      .filter(k => k !== 'time')
+                      .map((key, i) => (
+                        <Line
+                          key={key}
+                          type="monotone"
+                          dataKey={key}
+                          stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                          strokeWidth={2.25}
+                          dot={false}
+                        />
+                      ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </Card>
           )}
         </div>
