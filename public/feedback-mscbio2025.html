@@ -713,7 +713,7 @@ let state = load() || freshState();
 
 function freshState() {
   return {
-    session_id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
+    session_id: (crypto.randomUUID ? crypto.randomUUID() : (function () { const b = new Uint8Array(16); crypto.getRandomValues(b); return Array.prototype.map.call(b, x => x.toString(16).padStart(2, '0')).join(''); })()),
     started_at: new Date().toISOString(),
     profile: (() => { const os = detectOS(); return { os, os_version: detectOSVersionSync(os), browser: detectBrowser(), device: detectDevice(os), processor: '' }; })(),
     assignments: [],
