@@ -382,10 +382,10 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
         </p>
       </div>
 
-      {/* While the syntax help is open the row keeps its natural height and
-          the container scrolls, instead of squeezing the row (whose children
-          would otherwise paint over the expanded help). */}
-      <div className={`flex gap-4 ${helpOpen ? 'flex-none' : 'flex-1 min-h-0'}`}>
+      {/* The row never shrinks below its content's min-height (flex min-height
+          defaults to min-content); when the viewport is too short the container
+          scrolls instead of the children painting over the syntax help. */}
+      <div className={`flex gap-4 ${helpOpen ? 'flex-none' : 'flex-1'}`}>
         {/* Model Editor (left) */}
         <Card className="w-80 shrink-0 p-3 flex flex-col">
           <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">
