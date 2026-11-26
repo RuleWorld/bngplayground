@@ -1,6 +1,7 @@
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execFile } from 'child_process';
 import util from 'util';
@@ -14,7 +15,7 @@ const paths = resolveBNG2Paths();
 const execPromise = util.promisify(execFile);
 
 describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
-    const modelDir = path.resolve('temp_parity_polymer_wasm');
+    let modelDir: string;
     const bnglPath = findRuleHubModelPath('polymer');
     const bng2Path = paths.bng2pl!;
 
@@ -22,12 +23,10 @@ describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
         throw new Error('Could not locate polymer model in local RuleHub checkout');
     }
 
-    // Ensure temp dir exists
-    if (!fs.existsSync(modelDir)) fs.mkdirSync(modelDir);
-
     let referenceData: any[] = [];
 
     beforeAll(async () => {
+        modelDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bng-parity-polymer-wasm-'));
         // 1. Generate XML and Reference Data using BNG2.pl
         // We run for a short time to get reference points
         console.log(`Running BNG2.pl: perl ${bng2Path} --outdir ${modelDir} ${bnglPath}`);
@@ -55,6 +54,12 @@ describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
             console.warn("No reference .gdat found from BNG2 run. Will only check if WASM runs.");
         }
     }, 60000);
+
+    afterAll(() => {
+        if (modelDir) {
+            fs.rmSync(modelDir, { recursive: true, force: true });
+        }
+    });
 
     it('should run polymer.xml with NFsim WASM and match observables', async () => {
         const xmlPath = path.join(modelDir, 'polymer.xml');

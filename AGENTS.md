@@ -244,9 +244,11 @@ ruleworld-bngplayground/
 ├── packages/
 │   ├── engine/
 │   │   └── src/                     # Canonical location for all core algorithms
-│   └── mcp-server/
-│       └── src/                     # MCP server tool handlers
-├── src/                             # Legacy shims (do not add here)
+│   ├── mcp-server/
+│   │   └── src/                     # MCP server tool handlers
+│   └── rulehub/
+│       └── src/                     # RuleHub manifest, model loading, and search
+├── src/                             # Browser-dependent services (WebGPU, TF.js, Atomizer, routing)
 ├── tests/                           # Vitest test files
 ├── scripts/                         # Build-time and utility scripts
 ├── .github/workflows/               # CI/CD and Jules agent workflows
@@ -254,8 +256,8 @@ ruleworld-bngplayground/
 ```
 
 ### Test File Locations
-- **`tests/*.spec.ts`** - Formal Vitest tests (run by `npm run test`)
-- **`src/*.test.ts`** - Additional test files (not in Vitest config, run manually with `npx vitest run`)
+- **`tests/*.spec.ts`** - Formal Vitest tests (run by `npm run test:fast` / `npm run test:full:safe`)
+- **`src/**/*.{spec,test}.ts`** - Included in `vitest.config.ts` (except slow benchmark and parser regression specs, which can be run manually with `npx vitest run`)
 - **Root `debug_*.ts`** - One-off debugging scripts (gitignored, not part of test suite)
 
 ### Gitignored Files
@@ -297,7 +299,7 @@ The following are gitignored and should be considered temporary/debug:
 
 ## Architecture Notes
 
-- React 19 + Vite 6 + TypeScript 5.8
+- React 19 + Vite 8 + TypeScript 6 + Vitest 4
 - Web Worker + WASM for browser-based simulation
 - ANTLR4 for BNGL parsing
 - Cytoscape for network visualization

@@ -98,7 +98,7 @@ unsafe does not depend on them.
 
 A third pass derived BNG2's `multScale` from the fork source and measured it
 against the three contrasting rules. The derivation is in
-`docs/bng2-stat-factor-derivation.md`. Its conclusions:
+`docs/engineering/bng2-stat-factor-derivation.md`. Its conclusions:
 
 **`zhang_2021` has `multScale == 1` for all 26 rule instances** (`|RG| == |Stab|`
 everywhere), so the whole emitted factor is the surviving-instance count. BNG2's

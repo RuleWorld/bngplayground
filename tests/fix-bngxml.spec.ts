@@ -1,7 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '@bngplayground/engine';
-import * as fs from 'fs';
 
 describe('BNGXMLWriter Fixes', () => {
     it('should generate valid XML for degradation rules with dead molecule', () => {
@@ -36,18 +35,15 @@ describe('BNGXMLWriter Fixes', () => {
         };
 
         const xml = BNGXMLWriter.write(simpleModel as any);
-        fs.writeFileSync('debug_model_zap_fixed.xml', xml);
-        
+
         // Check for self-closing tags
         expect(xml).toContain('<MoleculeType id="dead"/>');
         expect(xml).toContain('<Molecule id="RR1_PP1_M1" name="dead">');
-        
+
         // Check that junk molecule type is NOT added
         expect(xml).not.toContain('id="A(), B()"');
         // Check that A and B are added as separate types
         expect(xml).toContain('<MoleculeType id="A">');
         expect(xml).toContain('<MoleculeType id="B"/>');
-
-        fs.writeFileSync("debug_model_zap_fixed.xml", xml);
     });
 });

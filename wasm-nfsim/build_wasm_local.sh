@@ -3,13 +3,14 @@ set -euo pipefail
 
 # Allow EMSDK to be provided externally; otherwise, fall back to sensible defaults.
 if [ -z "${EMSDK:-}" ]; then
-  # Try a repository-local emsdk first, then the original user-specific path as a last resort.
   SCRIPT_DIR_LOCAL="$(cd "$(dirname "$0")" && pwd)"
-  DEFAULT_EMSDK_LOCAL="$SCRIPT_DIR_LOCAL/emsdk"
-  if [ -d "$DEFAULT_EMSDK_LOCAL" ]; then
-    EMSDK="$DEFAULT_EMSDK_LOCAL"
+  if [ -d "$SCRIPT_DIR_LOCAL/emsdk" ]; then
+    EMSDK="$SCRIPT_DIR_LOCAL/emsdk"
+  elif [ -d "$HOME/emsdk" ]; then
+    EMSDK="$HOME/emsdk"
   else
-    EMSDK="/c/Users/Achyudhan/emsdk"
+    echo "Error: EMSDK environment variable is not set and no emsdk directory was found." >&2
+    exit 1
   fi
 fi
 export EMSDK

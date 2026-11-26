@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { resolveBNG2Paths } from '../../tools/bng2-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,7 +41,7 @@ function collectBnglFilesRecursive(rootDir, results = []) {
   return results;
 }
 
-const BNG2_PATH = 'c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PATH = process.env.BNG2_PATH || process.env.BNG2_PL || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 const TEST_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 
 // Find all .bngl files in the local RuleHub checkout.

@@ -23,4 +23,4 @@ Logic and UX standards for the BNG Playground key features.
 ## Parser Verification
 - **Limit Awareness**: The TypeScript parser (`NetworkGenerator`) has a recursion/iteration limit (default 20).
     - **Parity**: For large models (e.g., `Hat_2016`, `Blinov_2006`), this limit results in undercounting species/reactions vs BNG2.pl.
-    - **Fix**: When rigorous parity is needed, increase iteration limits or rely on the `bng-win` executable for ground truth.
+    - **Fix**: When rigorous parity is needed, increase iteration limits or validate against `BNG2.pl` for ground truth.

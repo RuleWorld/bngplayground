@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveBNG2Paths } from '../bng2-paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ const RULEHUB_ROOT = process.env.RULEHUB_ROOT
     : path.resolve(PROJECT_ROOT, '..', 'RuleHub');
 const EXAMPLE_MODELS_DIR = path.join(RULEHUB_ROOT, 'Contributed', 'BNGPlayground_Examples');
 const BNG_TEST_OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
-const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PATH = process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 const REPORT_FILE = path.join(PROJECT_ROOT, 'example_models_validation_report.json');
 
 if (!fs.existsSync(BNG_TEST_OUTPUT_DIR)) {

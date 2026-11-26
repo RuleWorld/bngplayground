@@ -11,46 +11,41 @@ A fast sanity check to verify core simulation functionality after code changes.
 Use before committing changes, especially after modifying:
 
 - `services/bnglWorker.ts`
-- `src/parser/BNGLVisitor.ts`
-- `src/services/graph/NetworkGenerator.ts`
-- `src/services/graph/core/Matcher.ts`
+- `packages/engine/src/parser/BNGLVisitor.ts`
+- `packages/engine/src/services/graph/NetworkGenerator.ts`
+- `packages/engine/src/services/graph/core/Matcher.ts`
 
 ## Steps
 
 ### 1. Type check (fast)
 
-// turbo
-
 ```bash
-npm run type-check 2>&1 | Select-Object -Last 30
+npm run type-check
 ```
 
 Expected: No errors in modified files.
 
-### 2. Run quick model test
-
-// turbo
+### 2. Run fast unit test gate
 
 ```bash
-npx vitest run src/filtered_benchmark.test.ts --reporter=verbose 2>&1 | Select-Object -Last 50
+npm run test:fast
 ```
 
-Expected: All tests pass.
+Expected: All tests pass cleanly without hanging.
 
-### 3. (Optional) Full parity check
+### 3. (Optional) Full scientific suite & parity check
 
-If smoke test passes, run `/parity-check` for full validation:
+For any change that can affect numerical output:
 
 ```bash
-npm run generate:web-output && npx ts-node scripts/compare_outputs.ts
+npm run test:full:safe
+npm run test:reference
 ```
 
 ## Quick One-Liner
 
-// turbo-all
-
 ```bash
-npm run type-check && npx vitest run src/filtered_benchmark.test.ts --reporter=verbose
+npm run type-check && npm run test:fast
 ```
 
 ## If Tests Fail
@@ -58,7 +53,7 @@ npm run type-check && npx vitest run src/filtered_benchmark.test.ts --reporter=v
 1. Check git diff to identify recent changes:
 
    ```bash
-   git diff HEAD~1 --stat
+   git diff HEAD --stat
    ```
 
 2. Run specific debug workflow:
@@ -68,5 +63,5 @@ npm run type-check && npx vitest run src/filtered_benchmark.test.ts --reporter=v
 
 ## Related Workflows
 
-- [`/parity-check`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/parity-check.md) - Full comparison
-- [`/code-review`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/code-review.md) - Code quality
+- [`/parity-check`](./parity-check.md) - Full comparison
+- [`/code-review`](./code-review.md) - Code quality

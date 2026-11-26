@@ -3,14 +3,17 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { Atomizer } from '../../atomizer-ts/src/index';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
 
 // libsbmljs uses 'self', which is not defined in Node.js
 if (typeof self === 'undefined') {
     (global as any).self = global;
 }
 
-// Configuration - use system-installed BioNetGen (Anaconda)
-const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+// Configuration - auto-detect BioNetGen via PyBioNetGen or BNG2_PATH / BNGPATH
+const resolvedBng = resolveBNG2Paths();
+const BNG2_PATH = process.env.BNG2_PATH || resolvedBng.bng2pl || 'BNG2.pl';
+const BNG2_PERL5LIB = resolvedBng.perl5lib || path.join(path.dirname(BNG2_PATH), 'Perl2');
 const OUTPUT_BASE = path.resolve('tests/pac');
 const DEFAULT_TOLERANCE = 1e-3;
 
@@ -77,10 +80,10 @@ function runBNG2(args: string[], timeoutMs = 600_000): string {
         return normalizePath(arg);
     });
     try {
-        // Set PERL5LIB for Windows Perl to find BNG2.pl modules
+        // Set PERL5LIB so Perl can find BNG2.pl modules
         const env = {
             ...process.env,
-            PERL5LIB: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\Perl2'
+            ...(fs.existsSync(BNG2_PERL5LIB) ? { PERL5LIB: BNG2_PERL5LIB } : {})
         };
         const out = execFileSync('perl', [normalizePath(BNG2_PATH), ...normalizedArgs], { stdio: 'pipe', timeout: timeoutMs, env });
         return out.toString();

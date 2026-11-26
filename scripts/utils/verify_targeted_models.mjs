@@ -3,12 +3,14 @@ import path from 'path';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
+import { resolveBNG2Paths } from '../../tools/bng2-paths.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const RULEHUB_ROOT = process.env.RULEHUB_ROOT
   ? path.resolve(process.env.RULEHUB_ROOT)
   : (fs.existsSync(path.resolve(PROJECT_ROOT, '..', 'RuleHub')) ? path.resolve(PROJECT_ROOT, '..', 'RuleHub') : null);
-const BNG2_PL = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PL = process.env.BNG2_PL || process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 const PERL = 'perl';
 
 function trimToModelEnd(code) {

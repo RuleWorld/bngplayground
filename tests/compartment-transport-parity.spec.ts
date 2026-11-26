@@ -1,10 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import { writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { describe, it, expect, afterAll } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
-const OUTPUT_PATH = resolve(process.cwd(), 'test_compartment_transport_analytical.csv');
+const TEMP_DIR = mkdtempSync(join(tmpdir(), 'bng-compartment-transport-'));
+const OUTPUT_PATH = join(TEMP_DIR, 'test_compartment_transport_analytical.csv');
 
 describe('Compartment Transport - Generate Web Simulator CSV', () => {
+    afterAll(() => {
+        rmSync(TEMP_DIR, { recursive: true, force: true });
+    });
     it('generates expected transport dynamics CSV', () => {
         // Since native NFsim doesn't support compartments, we'll generate
         // reference data from analytical solution

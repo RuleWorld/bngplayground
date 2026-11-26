@@ -12,9 +12,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { resolveBNG2Paths } from '../tools/bng2-paths';
 
-const BNG2_PATH = 'C:/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win';
-const BNG2_PL = path.join(BNG2_PATH, 'BNG2.pl');
+const resolvedBng = resolveBNG2Paths();
+const BNG2_PL = process.env.BNG2_PATH || resolvedBng.bng2pl || 'BNG2.pl';
+const BNG2_PATH = resolvedBng.bngRoot || path.dirname(BNG2_PL);
 const GDAT_DIR = path.resolve(process.env.BNG_OUTPUT_DIR || 'bng_test_output');
 const NET_DIR = path.resolve(process.env.BNG_OUTPUT_DIR || 'bng_test_output');
 const WORK_DIR = path.resolve('artifacts/bng2_workdir');

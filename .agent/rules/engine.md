@@ -33,7 +33,7 @@ Engineering standards for graph matching and network generation.
 
 ## Compartments & cBNGL
 
-- **Notation Support**: Parser must handle BOTH prefix (\@PM:Species\) and suffix (\Species@PM\) notations for compartments.
+- **Notation Support**: Parser must handle BOTH prefix (`@PM:Species`) and suffix (`Species@PM`) notations for compartments.
 - **Heterogeneous Scaling**: When reacting 3D (cytoplasm) and 2D (membrane) species, scale the rate by the 3D compartment volume (Highest Dimension Rule).
 - **Product Inheritance**: Products of heterogeneous reactions should inherit the compartment of the lower-dimension reactant (e.g., L@EC + R@PM -> LR@PM).
 

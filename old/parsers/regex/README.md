@@ -7,7 +7,7 @@
 Use the ANTLR-based parser instead:
 
 ```typescript
-import { parseBNGLWithANTLR } from '@/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 
 const result = parseBNGLWithANTLR(bnglContent);
 if (result.success) {

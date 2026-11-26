@@ -5,8 +5,11 @@ This directory contains the test suite for the BioNetGen Web Simulator.
 ## Running Tests
 
 ```bash
-# Run all tests
-npm run test
+# Hang-safe fast unit gate (recommended for day-to-day / structural changes)
+npm run test:fast
+
+# Hang-safe full scientific suite (parity vs BNG2, CVODE, simulation)
+npm run test:full:safe
 
 # Run tests in watch mode
 npm run test:watch
@@ -80,10 +83,9 @@ Compare web simulator outputs against BioNetGen for specific model classes:
 
 ### Atomizer Tests
 
-Tests for the Atomizer (natural language → BNGL compiler):
+Tests for the Atomizer (SBML → BNGL compiler):
 
-- `atomizer/*.spec.ts` (13 files) - Atomizer validation and conversion tests
-- Located in: `tests/atomizer/`
+- `tests/atomizer/*.spec.ts` (15 files) - Atomizer validation and conversion tests
 - Validation harness: `tests/atomizer/validation_harness.ts`
 
 ### Other Tests
@@ -93,57 +95,39 @@ Tests for the Atomizer (natural language → BNGL compiler):
 - `biomodels-import.spec.ts` - BioModels SBML import
 - `sbml-*.spec.ts` - SBML import/export tests
 
-## Test File Naming
+## Test File Inclusion & Exclusions
 
-The test suite uses two naming conventions:
+`vitest.config.ts` includes:
+- `tests/**/*.{test,spec}.{ts,tsx}`
+- `src/**/*.{test,spec}.{ts,tsx}`
+- `packages/engine/tests/**/*.{test,spec}.ts`
+- `packages/mcp-server/tests/**/*.{test,spec}.ts`
 
-### `*.spec.ts` (Included in `npm run test`)
-Standard test files that run as part of the main test suite.
-
-### `*.test.ts` (NOT included in default run)
-Additional test files that must be run explicitly. These exist but are not in `vitest.config.ts` include pattern.
-
-**Note**: Files in `src/*.test.ts` are NOT included in the vitest config and must be run manually:
-- `src/gdat_benchmark.test.ts`
-- `src/diagnostic_benchmark.test.ts`
-- `src/published_benchmark.test.ts`
-- `src/parser_regression.test.ts`
-- `src/normalization_test.test.ts`
-
-## Excluded Test Files
-
-Per `vitest.config.ts`, these patterns are explicitly excluded from `npm run test`:
-
-- `tests/debug-*.spec.ts` - Debug tests (run explicitly when needed)
-- `tests/*isolated*.spec.ts` - Isolated reproduction tests
-- `tests/*repro*.spec.ts` - Reproduction tests for specific bugs
-- `tests/*spawnsync*.spec.ts` - Spawn sync tests
-
-These can be run individually:
-```bash
-npx vitest run tests/debug-matcher.spec.ts
-```
+Slow benchmark suites (`src/*benchmark*.test.ts`, `tests/profile-everything.spec.ts`), Playwright/a11y suites, debug/repro specs (`tests/debug-*.spec.ts`, `tests/*isolated*.spec.ts`, `tests/*repro*.spec.ts`, `tests/*spawnsync*.spec.ts`), and heavy BNG2/WASM parity specs are excluded from the fast default gate and run via `npm run test:full:safe`, `npm run test:reference`, or targeted `npx vitest run <file>`.
 
 ## Test Structure by Directory
 
 ```
 tests/
-├── *.spec.ts              # Main test suite (46 files)
-├── *.test.ts              # Additional tests not in config (17 files)
-├── analysis/              # Analysis feature tests (8 files)
-├── atomizer/              # Atomizer validation (13 files)
-│   └── validation_harness.ts
+├── *.spec.ts              # Root-level test suites (101 files)
+├── a11y/                  # Accessibility tests (1 file)
+├── analysis/              # Analysis feature tests (11 files)
+├── atomizer/              # SBML Atomizer validation (15 files)
+├── bionetgen-repo/        # BioNetGen corpus tests (1 file)
 ├── diagnostics/           # Diagnostic tests (2 files)
-├── fixtures/              # Test fixtures and data
-│   └── validation_models.ts
-├── graph/                 # Graph algorithm tests (3 files)
-├── pac/                   # PAC (Pattern Action Context) tests
-├── parser/                # Parser tests (3 files)
-├── playwright/            # Playwright E2E tests (1 file)
-├── services/              # Service tests (33 files)
-├── simulation/            # Simulation tests (4 files)
-├── ui/                    # UI component tests (2 files)
-└── visualization/         # Visualization tests (5 files)
+├── figure/                # Figure export tests (1 file)
+├── fixtures/              # Test fixtures and shared data
+├── graph/                 # Graph algorithm tests (4 files)
+├── hooks/                 # React hook tests (2 files)
+├── indra/                 # INDRA integration tests (1 file)
+├── parser/                # Parser tests (4 files)
+├── playwright/            # Playwright E2E tests (4 files)
+├── services/              # Service tests (49 files)
+├── simulation/            # Simulation tests (3 files)
+├── ui/                    # UI component tests (8 files)
+├── utils/                 # Utility tests (3 files)
+├── validation/            # Validation helper tests (1 file)
+└── visualization/         # Visualization tests (6 files)
 ```
 
 ## Import Paths
@@ -236,13 +220,10 @@ npx vitest run tests/debug-matcher.spec.ts
 
 ## Test Data & Fixtures
 
-- **`tests/fixtures/`** - Test fixtures and shared data
-  - `validation_models.ts` - List of validation models
-- **`example-models/`** (root) - 175+ BNGL example models
-- **`published-models/`** (root) - 562+ published BNGL models
-- **Reference fixtures** (gitignored but preserved):
-  - `bng_test_output/` - BNG2.pl outputs for comparison
-  - `gdat_comparison_output/` - GDAT comparison data
+- **`tests/fixtures/`** - Test fixtures and shared data (SBML cases, MCP routing intents, RuleHub search cases)
+- **[RuleHub](https://github.com/ruleworld/rulehub)** - External canonical repository of published, tutorial, and example BNGL models (synced via `npm run sync-gallery`)
+- **Local reference cache** (gitignored):
+  - `bng_test_output/` - Precomputed `BNG2.pl` outputs for parity comparison (`npm run test:reference`)
 
 ## Common Test Patterns
 

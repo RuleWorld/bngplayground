@@ -1,8 +1,9 @@
 /// <reference types="node" />
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { BNGXMLWriter } from '../packages/engine/src/index';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
+import * as os from 'os';
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
@@ -21,8 +22,18 @@ const paths = resolveBNG2Paths();
  * assert a specific quantitative effective rate.
  */
 describe.skipIf(!hasNFsim())('NFsim Compartment Parity', () => {
-    const testDir = 'temp_parity_compartment';
+    let testDir: string;
     const nfsimPath = paths.nfsim!;
+
+    beforeAll(() => {
+        testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bng-parity-compartment-'));
+    });
+
+    afterAll(() => {
+        if (testDir) {
+            fs.rmSync(testDir, { recursive: true, force: true });
+        }
+    });
 
     // Simple compartmental model: A + B -> C in volume V=2
     const compartmentBngl = `

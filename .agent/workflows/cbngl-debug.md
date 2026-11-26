@@ -26,45 +26,34 @@ cBNGL (compartmental BNGL) adds:
 
 ### 1. Run parity check
 
-Use `/parity-check` to confirm the error pattern.
+Use `/parity-check` (or `npm run test:reference`) to confirm the error pattern.
 
-### 2. Check compartment definitions
+### 2. Inspect compartment definitions and observables
 
-```bash
-grep -n "begin compartments" public/models/<model>.bngl
-```
+Locate the model in your local RuleHub checkout (`../RuleHub` or via `tools/rulehubLocal.ts`) and check its `begin compartments` and `begin observables` blocks.
 
-### 3. Check observable patterns
+### 3. Debug volume scaling
 
 ```bash
-grep -n "Observables" -A 20 public/models/<model>.bngl
-```
-
-### 4. Debug volume scaling
-
-// turbo
-
-```bash
-grep -n "getVolumeScale" services/bnglWorker.ts src/services/graph/NetworkGenerator.ts
+grep -n "getVolumeScalingInfo\|scalingVolume" packages/engine/src/services/graph/NetworkGenerator.ts packages/engine/src/services/simulation/NetworkExpansion.ts
 ```
 
 ## Key Functions to Check
 
-1. **`getVolumeScale`** in `NetworkGenerator.ts` - bimolecular rate scaling
-2. **Compartment prefix parsing** in `BNGLParser.ts`
-3. **Observable matching** in `bnglWorker.ts` for `@comp::Species` syntax
+1. **Volume scaling** in `packages/engine/src/services/graph/NetworkGenerator.ts` and `packages/engine/src/services/simulation/NetworkExpansion.ts`
+2. **Compartment prefix parsing** in `packages/engine/src/services/graph/core/BNGLParser.ts`
+3. **Observable matching** in `packages/engine/src/services/simulation/SimulationLoop.ts` for `@comp::Species` syntax
 
 ## Verification
 
 After fixing, run:
 
 ```bash
-npm run generate:web-output && npx ts-node scripts/compare_outputs.ts
+npm run test:full:safe
+npm run test:reference
 ```
-
-Expected: `cbngl_simple` should change from FAIL to OK.
 
 ## Related Workflows
 
-- [`/parity-check`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/parity-check.md) - Full model comparison
-- [`/homodimer-debug`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/homodimer-debug.md) - Homodimer issues
+- [`/parity-check`](./parity-check.md) - Full model comparison
+- [`/homodimer-debug`](./homodimer-debug.md) - Homodimer issues

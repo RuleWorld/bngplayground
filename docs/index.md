@@ -29,29 +29,21 @@ BioNetGen Playground allows you to edit BNGL models, parse them, generate reacti
 :maxdepth: 2
 :caption: User Guide
 
-/docs/quickstart
-/docs/interface-overview
-/docs/gallery
+quickstart
+solvers
+mcp-server
 ```
 
 ```{toctree}
 :maxdepth: 2
-:caption: Features & Solvers
+:caption: Engineering Notes
 
-/docs/solvers
-/docs/cbngl
-/docs/analysis-tabs
-```
-
-```{toctree}
-:maxdepth: 2
-:caption: Developer Guide
-
-/docs/architecture
-/docs/building-wasm
-/docs/mcp-server
-/docs/mcp-analysis-bug-fixes
-/docs/contributing
+engineering/bng2-reference-behaviours
+engineering/bng2-stat-factor-derivation
+engineering/stat-factor-finding
+engineering/rate-field-and-fixture-integrity
+engineering/nfsim-executable-resolution
+engineering/results-export-audit
 ```
 
 ---

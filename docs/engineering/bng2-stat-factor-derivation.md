@@ -94,7 +94,7 @@ verified as arithmetic against the `.net`:
 | `_R9` | 2 | `{c2}` | 2 | 1 | **2 ✗** |
 | `_R13` | 6 | `{c3}` | 6 | 1 | **6 ✗** |
 
-That is the "free binding site count" `docs/stat-factor-finding.md` observed,
+That is the "free binding site count" `docs/engineering/stat-factor-finding.md` observed,
 derived rather than fitted.
 
 ## 3. Why replacing `patternAutomorphismFactor` cannot work at that call site
@@ -199,7 +199,7 @@ on `RxnRule` but never populate. Two viable routes:
   preference order picks an arbitrary representative among interchangeable
   molecules.
 
-Both are real design work, which is what `docs/stat-factor-finding.md` already
+Both are real design work, which is what `docs/engineering/stat-factor-finding.md` already
 flagged as needing its own session.
 
 ## 6. Baseline (unchanged tree)

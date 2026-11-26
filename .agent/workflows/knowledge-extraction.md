@@ -1,11 +1,10 @@
 ---
-description: 
+description: Extract recurring patterns and gotchas from past conversations into project rules
 ---
 
 # Knowledge Extraction Workflow
 
-Extract challenges and patterns from past conversations/walkthroughs
-into project rules.
+Extract challenges and patterns from past conversations/walkthroughs into project rules under `.agent/rules/`.
 
 ## Prerequisites
 
@@ -13,103 +12,50 @@ into project rules.
 
 ## Steps
 
-### 1. Find All Walkthroughs
-
-// turbo
+### 1. Find Walkthroughs
 
 ```bash
-find C:\Users\Achyudhan\.gemini\antigravity\brain\ -name "walkthrough.md" -type f 2>/dev/null
+find ~/.gemini/antigravity/brain/ -name "walkthrough.md*" -type f 2>/dev/null
 ```
-
-keep in mind certain ones are like "walkthrough.md.resolved.3" so be aware.
 
 ### 2. Read Each Walkthrough
 
-For each walkthrough found, read and extract:
+Extract:
 
 - **Challenges encountered** (errors, gotchas, blockers)
 - **Patterns established** (reusable solutions)
-- **Learnings** (things that were discovered)
-
-Look specifically for sections like:
-
-- "Challenges & Learnings"
-- "Key Patterns Established"
-- "Discovery" or "Learning" annotations
-- "Problem" / "Solution" pairs
+- **Learnings** (verified BNG2.pl behaviors or engine invariants)
 
 ### 3. Categorize Findings
 
 Group extracted knowledge by domain:
 
-| Domain           | Target Rule File           |
-| ---------------- | -------------------------- |
-| Svelte/SvelteKit | `.agent/rules/svelte.md`   |
-| API/Services     | `.agent/rules/api.md`      |
-| Database/Drizzle | `.agent/rules/database.md` |
-| Task YAML        | `.agent/rules/tasks.md`    |
-| Design System    | `.agent/rules/design.md`   |
-| Firmware/Rust    | `.agent/rules/style.md`    |
-| Flutter/Mobile   | `.agent/rules/flutter.md`  |
-| Packages/Modular | `.agent/rules/packages.md` |
+| Domain | Target Rule File |
+| --- | --- |
+| UI & Analysis | `.agent/rules/analysis.md` |
+| SBML Atomizer | `.agent/rules/atomizer.md` |
+| BioNetGen Reference | `.agent/rules/bionetgen-review.md` |
+| Build & Parser | `.agent/rules/build_and_parser.md` |
+| Core Engine & Matching | `.agent/rules/engine.md` |
+| ANTLR Grammar & APIs | `.agent/rules/grammar_and_api.md` |
+| Visualization | `.agent/rules/visualization.md` |
+| WASM Solvers | `.agent/rules/wasm.md` |
 
 ### 4. Check Knowledge Items
-
-// turbo
 
 ```bash
 ls ~/.gemini/antigravity/knowledge/
 ```
 
-Read relevant knowledge item metadata for additional context:
-
-```bash
-cat ~/.gemini/antigravity/knowledge/<item>/metadata.json
-```
-
-### 5. Update Rules Files
+### 5. Update Rule Files
 
 For each finding:
 
-1. **Check if already documented** in target rule file
-2. **Add if new** — include code examples where applicable
-3. **Use consistent format**:
-   - Problem description
-   - Code example (wrong vs correct)
-   - Impact or reason
-
-### 6. Create Summary Artifact
-
-Create a summary in the current conversation's brain artifacts:
-
-```
-~/.gemini/antigravity/brain/<conversation-id>/challenges_summary.md
-```
-
-Include:
-
-- Challenges found (categorized)
-- Rules updated
-- Patterns extracted
-
-### 7. Commit Changes
-
-```bash
-git add .agent/rules/
-git commit -m "docs: update rules from knowledge extraction
-
-- [list specific rules updated]
-- [list key patterns added]"
-```
-
-## When to Run This Workflow
-
-- **Weekly**: Quick scan for new learnings
-- **After major sessions**: Extract patterns from complex work
-- **Before major refactors**: Ensure rules capture current best practices
+1. Check if already documented in the target rule file.
+2. Add if new — include concise problem, cause, and verified fix.
+3. Never commit changes without explicit user approval.
 
 ## Output
 
 - Updated rule files in `.agent/rules/`
-- Challenges summary artifact
-- Commit documenting changes
+- Summary of extracted learnings presented to the user

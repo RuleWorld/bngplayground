@@ -33,4 +33,4 @@ Rules for maintaining high-performance visualization components.
 ## UI Patterns
 - **Progressive Disclosure**: Hide advanced settings (Integrators, Steps) behind a 'Controls' toggle.
 - **Hierarchy**: Use a 3-tier tab structure: Time Courses -> Network -> Analysis.
-- **Performance**: Use Set-based lookups (\(N)\$) for link detection in force graphs.
+- **Performance**: Use Set-based lookups ($O(N)$) for link detection in force graphs.
