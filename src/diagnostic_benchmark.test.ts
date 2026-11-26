@@ -10,10 +10,11 @@ import { spawnSync } from 'child_process';
 
 import { parseBNGL } from '../services/parseBNGL';
 import { NetworkGenerator, BNGLParser } from '@bngplayground/engine';
+import { resolveBNG2Paths } from '../tools/bng2-paths';
 
 describe('Diagnostic Benchmark: Kozer_2014', () => {
     const projectRoot = path.resolve(__dirname, '..');
-    const bng2Path = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+    const bng2Path = process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || 'BNG2.pl';
     const tempDir = path.join(projectRoot, 'temp_diag');
 
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);

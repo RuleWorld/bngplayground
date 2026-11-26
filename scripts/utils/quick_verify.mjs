@@ -3,10 +3,12 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
+import { resolveBNG2Paths } from '../../tools/bng2-paths.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BNG_PATH = "C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl";
+const BNG_PATH = process.env.BNG2_PATH || process.env.BNG2_PL || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const RULEHUB_ROOT = process.env.RULEHUB_ROOT
   ? path.resolve(process.env.RULEHUB_ROOT)

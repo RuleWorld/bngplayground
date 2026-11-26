@@ -45,8 +45,10 @@ if not exist "%LIBBNG_SRC%\bng\bng_engine.h" (
 )
 
 REM --- Generate Bison/Flex parser on host (Windows variant) ---
-set WIN_FB_DIR=C:\Users\Achyudhan\winflexbison_tools
-set PATH=%WIN_FB_DIR%;%PATH%
+if not defined WIN_FB_DIR (
+    if exist "%USERPROFILE%\winflexbison_tools" set WIN_FB_DIR=%USERPROFILE%\winflexbison_tools
+)
+if defined WIN_FB_DIR set PATH=%WIN_FB_DIR%;%PATH%
 
 if not exist "%LIBBNG_SRC%\bng\generated" mkdir "%LIBBNG_SRC%\bng\generated"
 

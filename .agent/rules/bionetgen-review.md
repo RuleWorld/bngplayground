@@ -21,8 +21,10 @@ Defer all final decisions about BNGL syntax, semantics, and behavior to the offi
 
 ## BNG2.pl Path
 
-```
-perl "C:\Users\Achyudhan\anaconda3\envs\Research\Lib\site-packages\bionetgen\bng-win\BNG2.pl" <model.bngl>
+Paths are auto-detected from PyBioNetGen (`pip install bionetgen`) or overridden via `BNG2_PATH` / `BNGPATH`:
+
+```bash
+perl "${BNG2_PATH:-$BNGPATH/BNG2.pl}" <model.bngl>
 ```
 
 ## Common False Assumptions (Do Not Repeat)

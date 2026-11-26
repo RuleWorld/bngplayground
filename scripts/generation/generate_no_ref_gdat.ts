@@ -23,6 +23,7 @@ import { spawn } from 'child_process';
 import { once } from 'events';
 import { fileURLToPath } from 'url';
 import { buildReferenceNames, referenceCorpus } from '../../tools/validation/referenceNaming';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(THIS_DIR, '..', '..');
@@ -32,10 +33,7 @@ const SESSION_DIR = path.join(PROJECT_ROOT, 'artifacts', 'SESSION_2026_01_05_web
 const WORK_ROOT = path.join(SESSION_DIR, 'bng2_work');
 const LOG_ROOT = path.join(SESSION_DIR, 'bng2_logs');
 
-const DEFAULT_BNG2_PL =
-	'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
-
-const BNG2_PL = process.env.BNG2_PL || process.env.BNG2_PATH || DEFAULT_BNG2_PL;
+const BNG2_PL = process.env.BNG2_PL || process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || '';
 const PERL = process.env.PERL || 'perl';
 const TIMEOUT_MS = Number(process.env.BNG_MODEL_TIMEOUT_MS || process.env.BNG2_TIMEOUT_MS || 60_000);
 const CONCURRENCY = Math.max(1, Number(process.env.BNG_CONCURRENCY || 4));

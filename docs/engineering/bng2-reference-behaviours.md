@@ -102,9 +102,9 @@ All four lines verified verbatim on the wheel binary (767 total lines).
 | **canonical key** (`compare_networks.ts:85` `canonicalReaction`, sorts both sides, drops rate) | sorted | **sorted** | dropped | 636 distinct → 131 surplus | 3749 distinct → 552 surplus |
 
 The table in §Scale below uses the **audit key**. The narrative "636
-distinct" and "3749 emitted" figures (here and in `handoff-ci-parity.md`'s
-"3749 vs 4301" row) are the **canonical key**. Both are individually correct;
-the original text silently mixed them. Cross-check: handoff's "552 short"
+distinct" and "3749 emitted" figures (and the "3749 vs 4301" comparison)
+use the **canonical key**. Both are individually correct;
+the original text silently mixed them. Cross-check: the 552 difference
 equals exactly 4301 − 3749, i.e. the engine's egfr count equals BNG2's
 canonical-key distinct set — that entire apparent gap is duplicate artifact,
 same as the MEK 636-vs-636 zero-difference result.
@@ -130,7 +130,7 @@ conditions (wheel binary, forward-ref patch, 600 s per-model timeout):
 | `mek_isoform_optimization_de_mek1_t292d` | 42 | ✓ (767/725) |
 | `mek_isoform_optimization_de_mek1_wt` | 42 | ✓ (767/725) |
 | `mek_isoform_optimization_de_mek1_n78g` | 6 | ✓ (731/725) |
-| `Examples/biology/tlr3dsrnasensing/tlr3-dsrna-sensing` — the formerly unnamed "1 further model" | 3 | ✓ (161/158; also the `158 vs 161` row in `handoff-ci-parity.md`) |
+| `Examples/biology/tlr3dsrnasensing/tlr3-dsrna-sensing` — the formerly unnamed "1 further model" | 3 | ✓ (161/158) |
 
 276 + 42·4 + 6 + 3 = **453 across 7 models — aggregate confirmed exactly**,
 keyed by model name (the four `egfr` copies — 3 distinct md5s — count once,

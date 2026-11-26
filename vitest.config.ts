@@ -37,7 +37,6 @@ export default defineConfig({
       "tests/profile-everything.spec.ts",
       "tests/gdat-regression.spec.ts",
       "tests/examples.spec.ts",
-      "tests/examples_copy.spec.ts",
       "tests/model-repository-validation.spec.ts",
       "tests/massive-parity.spec.ts",
       "tests/bng2-comparison.spec.ts",
@@ -67,7 +66,6 @@ export default defineConfig({
       "tests/services/projectedNM.spec.ts",
       "tests/services/SparseLUSolver.spec.ts",
       "tests/services/sbplx.spec.ts",
-      "tests/services/CompartmentalProcessor.spec.ts",
       "tests/services/XMLValidator.spec.ts",
       "tests/safeExpressionEvaluator.spec.ts",
       // WASM-dependent tests (CVODE doesn't load in Node.js)
@@ -77,7 +75,6 @@ export default defineConfig({
       // Flaky/non-deterministic integration specs currently under active refactor.
       // Keep them runnable directly, but exclude from the default CI-fast gate.
       "tests/bngl-pattern-validation.spec.ts",
-      "tests/functionalRatesSecurity.spec.ts",
       // Tests requiring BNG2.pl / RuleHub models / native dependencies
       "tests/mwc_parity.spec.ts",
       "tests/polymer-compartment-parity.spec.ts",

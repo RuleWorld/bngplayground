@@ -4,6 +4,7 @@ import * as path from 'path';
 import { parseBNGL } from '../services/parseBNGL';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { execSync } from 'child_process';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
 
 function resolveRuleHubRoot(): string {
     const fromEnv = process.env.RULEHUB_ROOT?.trim();
@@ -30,7 +31,7 @@ async function run() {
     // However, for parity check, we usually compare the XML first if NFsim binary isn't easily runnable.
     // Let's try to run NFsim if it exists.
     try {
-        const nfsimPath = "C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\bin\\NFsim.exe";
+        const nfsimPath = process.env.NFSIM_PATH || resolveBNG2Paths().nfsim || 'NFsim';
         const gdatPath = path.resolve('temp_parity_polymer', 'polymer_web.gdat');
         const cmd = `"${nfsimPath}" -xml "${xmlPath}" -v -t 0.01 -osteps 10 -o "${gdatPath}"`;
         console.log(`Executing: ${cmd}`);

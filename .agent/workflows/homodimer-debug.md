@@ -12,59 +12,42 @@ Use this workflow when you see:
 
 - Exactly **50% relative error** on dimer/homodimer observables
 - Affected models: `blinov_2006`, `egfr_simple`, `fceri_ji`, `fceri_viz`
-- Web counts are exactly half of BNG2 reference counts
+- Web counts are half or double BNG2 reference counts
 
 ## Root Cause
 
-BNG2.pl counts each **complex** containing the pattern as 1, while the web simulator may count individual molecule instances. For dimers like `A.A`, BNG2 counts 1 (one complex), but web might count 2 (two A molecules).
+BNG2.pl counts each **complex** containing the pattern as 1 for `Species` observables and adjusts symmetric patterns by their automorphism factor. See `docs/engineering/bng2-stat-factor-derivation.md` and `docs/engineering/stat-factor-finding.md` before altering symmetry factors.
 
 ## Diagnosis Steps
 
 ### 1. Run parity check on affected model
 
-Use `/parity-check` first to confirm the 50% error pattern.
+Use `/parity-check` or `npm run test:reference` to confirm the error pattern.
 
-### 2. Check observable type
+### 2. Inspect observable patterns
 
-```bash
-grep -n "Dimers\|homodimer" public/models/<model>.bngl
-```
+Check whether the model defines `Molecules` or `Species` observables with symmetric patterns like `A().A()` or count constraints.
 
-Look for observables with patterns like `A().A()` or count constraints.
-
-### 3. Examine countPatternMatches function
-
-// turbo
+### 3. Examine pattern matching and symmetry handling
 
 ```bash
-grep -n "countPatternMatches" services/bnglWorker.ts
+grep -n "countPatternMatches\|getPatternAutomorphismFactor\|patternAutomorphismFactor" packages/engine/src/services/graph/NetworkGenerator.ts packages/engine/src/services/graph/core/Matcher.ts
 ```
 
 ### 4. Test fix in isolation
 
-Create a minimal test case in `tests/stat-factors.spec.ts` with:
-
-- A homodimer species: `A().A()`
-- An observable counting dimers
-- Verify count is 1, not 2
-
-## Fix Pattern
-
-For `Molecules` observables on symmetric complexes, the count should be:
-
-- `count = number of matching subgraphs / symmetry factor`
+Add or run a minimal regression test in `tests/stat-factors.spec.ts`.
 
 ## Verification
 
 After fixing, run:
 
 ```bash
-npm run generate:web-output && npx ts-node scripts/compare_outputs.ts
+npm run test:full:safe
+npm run test:reference
 ```
-
-Expected: `blinov_2006`, `egfr_simple`, `fceri_ji`, `fceri_viz` should change from FAIL to OK.
 
 ## Related Workflows
 
-- [`/parity-check`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/parity-check.md) - Full model comparison
-- [`/code-review`](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/.agent/workflows/code-review.md) - Code quality check
+- [`/parity-check`](./parity-check.md) - Full model comparison
+- [`/code-review`](./code-review.md) - Code quality check

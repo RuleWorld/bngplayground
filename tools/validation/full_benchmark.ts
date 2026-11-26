@@ -10,13 +10,14 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { execSync } from 'child_process';
+import { resolveBNG2Paths } from '../bng2-paths';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 
 // Path to BNG2.pl for timing comparison
-const BNG2_PATH = 'c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PATH = process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 interface BNG2Model {
   model: string;
   path: string;

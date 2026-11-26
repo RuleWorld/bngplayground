@@ -2,8 +2,7 @@
 
 <img src="public/logo.png" alt="BioNetGen Logo" width="200">
 
-**BioNetGen Playground** is a browser-native modeling and simulation environment for BioNetGen (BNGL): build, simulate, analyze, and reproducibly share rule-based models from a URL — no installation, no server.
- models: edit BNGL, parse, generate networks, run simulations, and analyze results through multiple visualization and analysis tabs.
+**BioNetGen Playground** is a browser-native modeling and simulation environment for BioNetGen (BNGL): edit BNGL, parse, generate networks, run simulations, analyze results, and reproducibly share rule-based models from a URL — no installation, no server.
 
 **Live demo:** <https://ruleworld.github.io/bngplayground>
 
@@ -30,7 +29,7 @@
 - **Publication Figure Pipeline**: Export figures with PLOS/Nature/Cell presets at 300 DPI
 - **CVODES Forward Sensitivity Analysis**: Compute parameter sensitivities alongside ODE solutions
 - **Dynamic Contact Map**: Interactive overlays with rule highlighting and animated simulations
-- **MCP Server**: 44 tool endpoints for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
+- **MCP Server**: 36 task-oriented tools in the default `stable` profile (45 tools in the opt-in `full` profile) for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
 
 ## Quick Start
 
@@ -46,7 +45,7 @@ Cross-platform installation instructions for Claude Desktop, Claude Code, Codex,
 
 ### MCP Capabilities Snapshot
 
-The MCP package (`packages/mcp-server`) currently exposes **44 tools** across:
+The MCP package (`packages/mcp-server`) exposes **36 tools** in the default `stable` profile (**45 tools** in the opt-in `full` profile including legacy compatibility aliases) across:
 
 - Core model lifecycle (parse, validate, network generation, simulation, parameter scans)
 - Calibration workflows (parameter fitting, PEtab import, model reduction)
@@ -67,6 +66,8 @@ For the authoritative tool list and schemas, see [packages/mcp-server/README.md]
 | `npm run build:full` | Full build including verification |
 | `npm run preview` | Preview the production build |
 | `npm run test` | Run Vitest once |
+| `npm run test:fast` | Hang-safe narrow unit test gate |
+| `npm run test:full:safe` | Hang-safe full scientific test suite |
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run generate:gdat` | Regenerate GDAT reference fixtures |
 | `npm run generate:embeddings` | Generate `public/model-embeddings.json` for semantic search |
@@ -101,7 +102,7 @@ Build outputs land in `public/nfsim.js` and `public/nfsim.wasm` automatically.
 
 ## Example Gallery + Semantic Search
 
-The Example Gallery features a curated library of **250+ verified BioNetGen models**, organized into biological and technical categories:
+The Example Gallery features a curated library of **482 BioNetGen models** synced from [RuleHub](https://github.com/ruleworld/rulehub) (with semantic search embeddings across **426 models**), organized into biological and technical categories:
 
 - **Cancer Biology**: Oncogenic signaling, tumor suppression, and DNA repair pathways.
 - **Immunology**: TCR/BCR signaling, FcεRI degranulation, innate immunity, and cytokine networks.
@@ -115,7 +116,7 @@ The Example Gallery features a curated library of **250+ verified BioNetGen mode
 - **Machine Learning & Signal Processing**: Bio-inspired implementations of K-means, SVMs, Q-learning, Hopfield networks, Fourier synthesizers, and Kalman filters.
 - **Synthetic Biology**: Molecular logic gates, pulse generators, counters, and edge detectors.
 - **RuleWorld Tutorials**: Official BioNetGen tutorials and comprehensive grammar examples.
-- **Example Models**: A complete set of **175 verified baseline models** covering advanced features and edge cases.
+- **Example Models**: Curated baseline models covering advanced BNGL features and edge cases.
 
 ### Performance & Parity
 
@@ -195,7 +196,7 @@ The codebase is split into two layers:
 | **App** | `App.tsx`, `components/`, `services/`, `hooks/` | React UI, worker communication, visualization |
 | **Engine** | `packages/engine/` (`@bngplayground/engine`) | Core algorithms: parser, graph, solvers, analysis |
 
-Files in `services/` and `src/` that were moved into the engine are kept as thin re-export shims so existing imports continue to work without changes.
+All legacy shims have been eliminated; consumers import core engine APIs directly from `@bngplayground/engine`. Remaining modules under `src/` have browser or framework dependencies (TF.js, WebGPU, Atomizer/libsbml, Web Workers, DOM APIs).
 
 ## Directory Structure & Codebase Deep Dive
 
@@ -204,8 +205,8 @@ Files in `services/` and `src/` that were moved into the engine are kept as thin
 ```
 bionetgen-web-simulator/
 ├── App.tsx / index.tsx       # React entry points
-├── types.ts / constants.ts   # Shared app-level types and constants
-├── components/               # React UI components and tabs
+├── types.ts                  # Shared app-level type barrel export
+├── components/               # React UI components and 27 analysis tabs
 ├── hooks/                    # Custom React hooks
 ├── services/                 # App-level services (worker comms, UI helpers)
 │   ├── bnglService.ts        # Main worker communication layer
@@ -213,41 +214,46 @@ bionetgen-web-simulator/
 │   ├── visualization/        # UI visualization helpers
 │   ├── grammar/              # Visual Designer grammar parser
 │   └── semanticSearch.ts     # TensorFlow.js semantic search
-├── src/                      # Thin shims re-exporting from @bngplayground/engine
-│   ├── parser/               # BNGLParserWrapper.ts shim
-│   ├── services/             # Shims for graph, ODE, analysis, estimation
-│   └── utils/                # Shims for utility functions
+├── src/                      # Browser-dependent services (WebGPU, TF.js, Atomizer, routing)
 ├── packages/
-│   └── engine/               # @bngplayground/engine — all core algorithms
-│       └── src/
-│           ├── index.ts      # Public barrel export
-│           ├── interfaces/   # SimulationEngine interface + EngineRegistry
-│           ├── parser/       # ANTLR4 BNGL parser implementation
-│           ├── services/
-│           │   ├── graph/    # Network generation, matching, canonicalization (Nauty)
-│           │   ├── simulation/ # ODE/SSA/PLA/PSA/NFsim solvers + SimulationLoop
-│           │   ├── analysis/ # Dose-response, LNA, FPT, perturbation, FIM, flux, steady state
-│           │   ├── inference/ # ABC-SMC, posterior predictive
-│           │   ├── parity/   # BNG2.pl regression testing utilities
-│           │   └── debugger/ # Rule-firing diagnostics
-│           └── utils/        # Shared utility functions
+│   ├── engine/               # @bngplayground/engine — all core algorithms
+│   │   └── src/
+│   │       ├── index.ts      # Public barrel export
+│   │       ├── interfaces/   # SimulationEngine interface + EngineRegistry
+│   │       ├── parser/       # ANTLR4 BNGL parser implementation
+│   │       ├── services/
+│   │       │   ├── graph/    # Network generation, matching, canonicalization (Nauty)
+│   │       │   ├── simulation/ # ODE/SSA/PLA/PSA/NFsim solvers + SimulationLoop
+│   │       │   ├── analysis/ # Dose-response, LNA, FPT, perturbation, FIM, flux, steady state
+│   │       │   ├── inference/ # ABC-SMC, posterior predictive
+│   │       │   ├── parity/   # BNG2.pl regression testing utilities
+│   │       │   └── debugger/ # Rule-firing diagnostics
+│   │       └── utils/        # Shared utility functions
+│   ├── mcp-server/           # @bngplayground/mcp-server — MCP server & interactive Apps
+│   └── rulehub/              # @bngplayground/rulehub — manifest, model loading, search
 ├── wasm-nfsim/               # NFsim WASM build scripts (C++ source in akutuva21/nfsim)
 │   ├── build_wasm.sh         # Linux/macOS build
 │   ├── build_wasm.bat        # Windows build
 │   └── build-wasm.github-actions-template.yml
 ├── wasm-sundials/            # CVODE (SUNDIALS) WASM build scripts + C source
+├── wasm-igraph/              # igraph WASM build scripts
+├── wasm-libbng/              # libBNG WASM build scripts
+├── wasm-spatial/             # Spatial reaction-diffusion WASM build scripts
 ├── tools/
+│   ├── build/                # Embeddings & GDAT generation tools
+│   ├── validation/           # BNG2.pl comparison and reference validation
 │   └── fetch-nfsim-wasm.sh   # Fetch pre-built NFsim artifacts from CI
 ├── public/
 │   ├── model-embeddings.json # Semantic search vector index (generated from RuleHub)
 │   ├── cvode.wasm            # Pre-built CVODE solver
 │   ├── nfsim.js / nfsim.wasm # Pre-built NFsim solver
-│   └── nauty.wasm            # Pre-built Nauty canonical labeler
-├── scripts/                  # Build-time and developer utilities
-│   ├── generateEmbeddings.mjs
-│   ├── parity_check.ts
-│   └── layered_parity_check.ts
-├── tests/                    # Vitest formal test suite (*.spec.ts)
+│   ├── nauty.wasm            # Pre-built Nauty canonical labeler
+│   ├── igraph.wasm           # Pre-built igraph network analysis module
+│   ├── libbng.wasm           # Pre-built libBNG module
+│   ├── libsbml.wasm          # Pre-built libSBML module
+│   └── spatial.wasm          # Pre-built spatial simulation module
+├── scripts/                  # Developer utilities, benchmarks, parity, and CI scripts
+└── tests/                    # Vitest test suite (*.spec.ts)
 ```
 
 ### Key entry points
@@ -257,7 +263,7 @@ bionetgen-web-simulator/
 - `components/VisualizationPanel.tsx` — analysis tab container
 - `services/bnglService.ts` — worker communication (parse / simulate)
 - `packages/engine/src/index.ts` — engine public API
-- `scripts/generateEmbeddings.mjs` — build-time semantic search embeddings
+- `tools/build/generateEmbeddings.mjs` — build-time semantic search embeddings
 
 ### Services organization
 
@@ -280,14 +286,15 @@ bionetgen-web-simulator/
 - **Semantic Search**: Client-side vector embeddings via TensorFlow.js for natural-language model discovery.
 - **Parallel Trajectories**: Core Comparison Engine for real-time "What-If" parameter perturbation analysis.
 
-## Architecture
+## Monorepo Summary
 
 BNG Playground uses a monorepo architecture with clear separation of concerns:
 
 - **Engine** (`packages/engine`): Pure TypeScript, zero browser dependencies. Contains all core algorithms (parsing, simulation, analysis).
-- **MCP Server** (`packages/mcp-server`): 44 tool endpoints for programmatic access.
+- **MCP Server** (`packages/mcp-server`): 36 default (`stable`) / 45 (`full`) tool endpoints for programmatic access.
+- **RuleHub** (`packages/rulehub`): Manifest, model loading, and search primitives.
 - **App Root**: React UI with 27 analysis tabs, Web Worker orchestration, and WASM module loading.
-- **7 WASM Modules**: CVODE (SUNDIALS), NFsim, Nauty, and 4 additional solver modules for native-speed computation.
+- **7 WASM Modules**: CVODE (SUNDIALS), NFsim, Nauty, igraph, libBNG, libSBML, and Spatial for native-speed computation.
 
 ## License:
 

@@ -41,7 +41,7 @@ This is strong evidence for the tested kinetic subset. It is not evidence that e
 
 ## Numerical fixture coverage
 
-The checked-in harness is [`scripts/atomizer/roundtrip_parity.ts`](scripts/atomizer/roundtrip_parity.ts), with the pinned external comparator in [`scripts/atomizer/compare_sbml_trajectories.py`](scripts/atomizer/compare_sbml_trajectories.py). It reports XML executable structure, state trajectories, and observable trajectories separately. Run it with:
+The checked-in harness is [`scripts/atomizer/roundtrip_parity.ts`](../scripts/atomizer/roundtrip_parity.ts), with the pinned external comparator in [`scripts/atomizer/compare_sbml_trajectories.py`](../scripts/atomizer/compare_sbml_trajectories.py). It reports XML executable structure, state trajectories, and observable trajectories separately. Run it with:
 
 ```bash
 conda run -n atomizer-sbml-roundtrip python --version

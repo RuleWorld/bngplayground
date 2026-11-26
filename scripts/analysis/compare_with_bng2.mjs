@@ -13,11 +13,13 @@ import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
+import { resolveBNG2Paths } from '../../tools/bng2-paths.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.join(__dirname, '..');
 
-const BNG2_PATH = 'c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+const BNG2_PATH = process.env.BNG2_PATH || resolveBNG2Paths().bng2pl || 'BNG2.pl';
 const TEST_DIR = path.join(ROOT_DIR, 'bng_compare_output');
 
 // Load the test report to get passing models

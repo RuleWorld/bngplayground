@@ -5,10 +5,10 @@ const crypto = require('crypto');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
-const DEFAULT_BNG2_PL =
-    'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
-
-const BNG2_PL = process.env.BNG2_PL || DEFAULT_BNG2_PL;
+const BNG2_PL =
+    process.env.BNG2_PL ||
+    process.env.BNG2_PATH ||
+    (process.env.BNGPATH ? path.join(process.env.BNGPATH, 'BNG2.pl') : 'BNG2.pl');
 const PERL = process.env.PERL || 'perl';
 const TIMEOUT_MS = Number(process.env.BNG2_TIMEOUT_MS || 120_000);
 const ONLY_ID = (process.env.ONLY_ID || '').trim();

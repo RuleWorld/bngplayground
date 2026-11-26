@@ -42,7 +42,7 @@ async function runBenchmarks() {
     
     const projectRoot = process.cwd();
     const tempDir = path.join(projectRoot, 'temp_bench_manual');
-    const bng2Path = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
+    const bng2Path = process.env.BNG2_PATH || process.env.BNG2_PL || (process.env.BNGPATH ? path.join(process.env.BNGPATH, 'BNG2.pl') : 'BNG2.pl');
 
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 

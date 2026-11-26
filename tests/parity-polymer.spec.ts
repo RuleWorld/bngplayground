@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { BNGXMLWriter } from '../packages/engine/src/index';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
+import * as os from 'os';
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
@@ -21,13 +22,17 @@ const paths = resolveBNG2Paths();
 const modelPath = findRuleHubModelPath('polymer');
 
 describe.skipIf(!hasNFsim() || !modelPath)('Polymer Model Parity', () => {
-    const testDir = 'temp_parity_polymer';
+    let testDir: string;
     const nfsimPath = paths.nfsim!;
     const bng2plPath = paths.bng2pl;
 
     beforeAll(() => {
-        if (!fs.existsSync(testDir)) {
-            fs.mkdirSync(testDir, { recursive: true });
+        testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bng-parity-polymer-'));
+    });
+
+    afterAll(() => {
+        if (testDir) {
+            fs.rmSync(testDir, { recursive: true, force: true });
         }
     });
 
