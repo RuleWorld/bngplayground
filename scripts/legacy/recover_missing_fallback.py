@@ -6,6 +6,7 @@ Attempt additional flexible matches for the small set of files remaining in
 import os
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 LISTING = ROOT / 'lanl-pybnf-8a5edab282632443.txt'
@@ -15,7 +16,7 @@ LOG = TARGET_BASE / 'recovery_fallback.txt'
 
 if not LISTING.exists() or not STILL.exists():
     print('Required files missing')
-    exit(1)
+    sys.exit(1)
 
 # parse files (reuse small parser)
 files = {}

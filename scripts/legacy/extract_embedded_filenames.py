@@ -6,6 +6,7 @@ same examples subdirectory.
 """
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 LISTING = ROOT / 'lanl-pybnf-8a5edab282632443.txt'
@@ -13,7 +14,7 @@ TARGET_BASE = ROOT / 'published-models' / 'PyBNG'
 
 if not LISTING.exists():
     print('Listing not found')
-    exit(1)
+    sys.exit(1)
 
 # parse FILE sections preserving their content
 files = {}  # path -> content
