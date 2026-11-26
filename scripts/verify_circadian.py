@@ -149,7 +149,6 @@ def compute_fim_python():
 
     # VIF
     # R = D^-1/2 * FIM * D^-1/2
-    D = np.diag(np.diag(FIM))
     D_inv_sqrt = np.diag(1.0 / np.sqrt(np.diag(FIM)))
     R = D_inv_sqrt @ FIM @ D_inv_sqrt
     R_inv = la.inv(R)

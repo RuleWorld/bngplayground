@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / 'published-models' / 'PyBNG'
@@ -9,7 +10,7 @@ FINAL_MISSING = TARGET / 'final_still_missing.txt'
 
 if not FAILED.exists():
     print('No failed_items.txt found')
-    exit(1)
+    sys.exit(1)
 
 # collect present files normalized
 present = []

@@ -10,19 +10,22 @@ minimumReleaseAgeExclude:
 overrides:
   argparse: ^2.0.1
   dompurify: ^3.4.17
-  undici: ^7.28.0
-  hono: ^4.12.34
-  "@hono/node-server": ^2.0.5
+  undici: ^7.30.2
+  hono: ^4.13.18
+  "@hono/node-server": ^2.1.8
   jose: ^6.2.2
-  esbuild: ^0.28.1
+  esbuild: ^0.28.2
   flatted: ^3.4.0
   protobufjs: 7.6.5
   css-tree: ^3.2.1
   "@csstools/css-syntax-patches-for-csstree": ^1.1.0
   picomatch: ^4.0.7
   lodash: ">=4.18.1"
-  brace-expansion: ^5.0.8
-  fast-uri: ^4.1.2
+  brace-expansion: ^5.0.9
+  fast-uri: ^4.2.3
   js-yaml: ^4.3.0
-  body-parser: ^2.3.0
+  body-parser: ^2.4.0
+  qs: ^6.16.1
+  ip-address: ^10.7.4
+  zod: ^4.6.6
   sharp: ^0.35.5

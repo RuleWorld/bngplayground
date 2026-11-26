@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -52,6 +51,7 @@ def configure(rr: roadrunner.RoadRunner) -> None:
         try:
             setattr(rr.integrator, key, value)
         except Exception:
+            # Integrator implementations may not expose tolerance attributes.
             pass
 
 
@@ -91,7 +91,6 @@ def main() -> int:
                 labels = [f"__ordered_{index}" for index in range(len(source_ids))]
                 source_by_label = {label: index + 1 for index, label in enumerate(labels)}
                 target_by_label = {label: index + 1 for index, label in enumerate(labels)}
-                missing = []
             else:
                 print(json.dumps({"ok": False, "error": "species label mismatch", "missing": missing}))
                 return 1
